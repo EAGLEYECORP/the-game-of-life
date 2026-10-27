@@ -5,6 +5,9 @@ extends CanvasLayer
 @onready var _hint: Label = $Hint
 @onready var _speedo: Label = $Speedometer
 @onready var _controls: Label = $Controls
+@onready var _district: Label = $District
+@onready var _notice: Label = $Notice
+@onready var _attribution: Label = $Attribution
 
 ## Vehicle shown on the speedometer, or null when on foot.
 var _vehicle: Vehicle = null
@@ -16,6 +19,9 @@ const CAR_CONTROLS := "W/S throttle & brake  ·  A/D steer  ·  Space handbrake\
 func _ready() -> void:
 	set_hint("")
 	show_vehicle(null)
+	set_district("")
+	set_notice("")
+	set_attribution("")
 
 
 func _process(_delta: float) -> void:
@@ -33,3 +39,19 @@ func show_vehicle(vehicle: Vehicle) -> void:
 	_vehicle = vehicle
 	_speedo.visible = vehicle != null
 	_controls.text = CAR_CONTROLS if vehicle else FOOT_CONTROLS
+
+
+## Current neighbourhood ("Old Medina", ...). Empty hides it.
+func set_district(text: String) -> void:
+	_district.text = text
+
+
+## Centre-top message, e.g. while the map loads.
+func set_notice(text: String) -> void:
+	_notice.text = text
+	_notice.visible = text != ""
+
+
+## Data credit. OpenStreetMap's licence (ODbL) requires showing it.
+func set_attribution(text: String) -> void:
+	_attribution.text = text

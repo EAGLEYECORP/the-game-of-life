@@ -5,3 +5,7 @@
 # Exports
 /build/
 *.tmp
+
+# Raw Overpass downloads (re-fetch with tools/osm/fetch_osm.gd).
+# The imported chunks in maps/casablanca_osm/ are small; commit those.
+data/osm/raw/*.json

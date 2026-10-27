@@ -98,6 +98,16 @@ func _camera_relative(input: Vector2) -> Vector3:
 	return dir.normalized() if dir.length() > 1.0 else dir
 
 
+## Turns the character to face `yaw` (radians, +Z-forward like the vehicles).
+func face(yaw: float) -> void:
+	_model.rotation.y = yaw
+
+
+## Direction the character is facing, for the camera's "snap behind" logic.
+func get_facing_yaw() -> float:
+	return _model.global_rotation.y
+
+
 # --- Vehicles ---------------------------------------------------------------
 
 ## Finds the closest free vehicle whose door is within reach and updates the HUD.

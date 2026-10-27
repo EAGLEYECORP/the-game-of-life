@@ -1,6 +1,7 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=8 format=3]
 
-[ext_resource type="Script" path="res://scripts/world/city_generator.gd" id="1_city"]
+[ext_resource type="Script" path="res://scripts/world/osm/chunk_streamer.gd" id="1_streamer"]
+[ext_resource type="PackedScene" path="res://maps/placeholder_city.tscn" id="2_fallback"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.32, 0.55, 0.85, 1)
@@ -20,8 +21,17 @@ tonemap_mode = 2
 ssao_enabled = true
 fog_enabled = true
 fog_light_color = Color(0.78, 0.8, 0.82, 1)
-fog_density = 0.0015
+fog_density = 0.002
 fog_sky_affect = 0.3
+
+[sub_resource type="StandardMaterial3D" id="Mat_sea"]
+albedo_color = Color(0.08, 0.3, 0.45, 1)
+metallic = 0.3
+roughness = 0.08
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_sea"]
+material = SubResource("Mat_sea")
+size = Vector2(6000, 6000)
 
 [node name="Casablanca" type="Node3D"]
 
@@ -33,7 +43,13 @@ transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0
 light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 1.2
 shadow_enabled = true
-directional_shadow_max_distance = 200.0
+directional_shadow_max_distance = 250.0
 
-[node name="City" type="Node3D" parent="."]
-script = ExtResource("1_city")
+[node name="Sea" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.6, 0)
+mesh = SubResource("PlaneMesh_sea")
+
+[node name="ChunkStreamer" type="Node3D" parent="." node_paths=PackedStringArray("sea")]
+script = ExtResource("1_streamer")
+fallback_scene = ExtResource("2_fallback")
+sea = NodePath("../Sea")

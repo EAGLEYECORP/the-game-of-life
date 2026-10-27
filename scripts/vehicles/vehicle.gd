@@ -118,6 +118,14 @@ func get_exit_position() -> Vector3:
 	return candidates[-1]
 
 
+## True if any wheel touches the ground.
+func is_on_ground() -> bool:
+	for child in get_children():
+		if child is VehicleWheel3D and child.is_in_contact():
+			return true
+	return false
+
+
 ## Speed in km/h, for the HUD.
 func get_speed_kmh() -> float:
 	return linear_velocity.length() * 3.6

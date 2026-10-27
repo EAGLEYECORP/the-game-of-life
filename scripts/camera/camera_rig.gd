@@ -92,6 +92,16 @@ func follow_player(player: Player) -> void:
 	_set_target(player, false)
 
 
+## Jumps straight to the target and behind it, with no smoothing (spawning,
+## respawning after falling in the sea).
+func snap_to_target() -> void:
+	if target == null:
+		return
+	_snap_behind_target()
+	var height := car_height if _in_vehicle else foot_height
+	global_position = target.global_position + Vector3.UP * height
+
+
 func follow_vehicle(vehicle: Vehicle) -> void:
 	_set_target(vehicle, true)
 	_snap_behind_target()
@@ -117,7 +127,9 @@ func _rotate_view(yaw_delta: float, pitch_delta: float) -> void:
 ## Yaw that places the camera directly behind the target. The SpringArm extends
 ## along the pivot's +Z, and our targets face +Z, so "behind" is target yaw + PI.
 func _behind_yaw() -> float:
-	return wrapf(target.global_rotation.y + PI, -PI, PI)
+	# The player's body never rotates (only its model does), so ask it.
+	var facing := (target as Player).get_facing_yaw() if target is Player else target.global_rotation.y
+	return wrapf(facing + PI, -PI, PI)
 
 
 func _snap_behind_target() -> void:

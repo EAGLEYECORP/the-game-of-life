@@ -4,8 +4,8 @@ extends Node3D
 ## blocks of flats, palm-lined parks, the Atlantic corniche to the north and a
 ## tall minaret as a landmark (a nod to the Hassan II Mosque).
 ##
-## Everything is made from primitive meshes so the project runs without any
-## imported assets. Replace blocks with real models in assets/ as the game grows.
+## This is the fallback world: ChunkStreamer loads it when no OpenStreetMap data
+## has been imported yet (see README), so the game always has something to run.
 ##
 ## Because the script is a @tool, the city also appears in the editor. Toggle
 ## "regenerate" in the inspector after changing a setting to rebuild it.
