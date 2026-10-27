@@ -22,33 +22,41 @@ const SPAWN_LON := -7.6330
 ## box enclosing all of them, so you can drive between areas.
 ## `heights` = [min, max] metres used when OSM has no height for a building.
 ## `palette` = facade colours picked per building in that area.
+## `traffic` / `pedestrians` = density multipliers for AI cars and walkers
+## (1.0 = normal): busy Corniche and downtown, narrow car-free Medina lanes
+## full of people.
 const AREAS := [
 	{
 		"name": "Hassan II Mosque",
+		"traffic": 1.0, "pedestrians": 1.2,
 		"bbox": [33.600, -7.645, 33.614, -7.620],
 		"heights": [8.0, 18.0],
 		"palette": [Color(0.96, 0.95, 0.92), Color(0.93, 0.90, 0.84), Color(0.88, 0.84, 0.76)],
 	},
 	{
 		"name": "Corniche - Ain Diab",
+		"traffic": 1.6, "pedestrians": 1.4,
 		"bbox": [33.585, -7.705, 33.610, -7.645],
 		"heights": [6.0, 15.0],
 		"palette": [Color(0.97, 0.96, 0.94), Color(0.92, 0.88, 0.80), Color(0.82, 0.88, 0.92)],
 	},
 	{
 		"name": "Twin Center - Maarif",
+		"traffic": 1.3, "pedestrians": 1.1,
 		"bbox": [33.578, -7.645, 33.594, -7.622],
 		"heights": [12.0, 30.0],
 		"palette": [Color(0.90, 0.90, 0.88), Color(0.80, 0.82, 0.84), Color(0.94, 0.92, 0.86)],
 	},
 	{
 		"name": "Old Medina",
+		"traffic": 0.35, "pedestrians": 1.6,
 		"bbox": [33.598, -7.626, 33.608, -7.610],
 		"heights": [5.0, 10.0],
 		"palette": [Color(0.97, 0.96, 0.93), Color(0.90, 0.82, 0.68), Color(0.86, 0.76, 0.60)],
 	},
 	{
 		"name": "Downtown (Art Deco)",
+		"traffic": 1.6, "pedestrians": 1.3,
 		"bbox": [33.586, -7.626, 33.600, -7.605],
 		"heights": [14.0, 24.0],
 		"palette": [Color(0.95, 0.93, 0.86), Color(0.92, 0.88, 0.78), Color(0.98, 0.97, 0.94)],
@@ -96,6 +104,13 @@ const LANDMARK_FALLBACKS := [
 const PARKING_SPACING := 45.0
 ## How many vehicles to line up near the player spawn (one of each type).
 const STARTER_VEHICLES := 5
+
+## Traffic lights: OSM traffic_signals nodes are snapped to the nearest
+## junction within this distance. Without any in the data, crossroads where
+## main roads (primary/secondary/tertiary) cross or meet get lights instead,
+## at least 1.8 x SIGNAL_MIN_SPACING apart.
+const SIGNAL_SNAP := 25.0
+const SIGNAL_MIN_SPACING := 45.0   ## Merge clusters (dual carriageways).
 
 ## Streaming grid. Each chunk is CHUNK_SIZE x CHUNK_SIZE metres.
 const CHUNK_SIZE := 200.0

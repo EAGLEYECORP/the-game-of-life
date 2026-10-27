@@ -29,7 +29,8 @@ signal interaction_hint_changed(text: String)
 var current_vehicle: Vehicle = null
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
-var _nearby_vehicle: Vehicle = null
+# Closest enterable thing: a Vehicle, or an AI TrafficCar (carjack).
+var _nearby_vehicle: Node3D = null
 # Locked car being broken into, and time left. Movement is blocked meanwhile.
 var _breaking_into: Vehicle = null
 var _break_in_left := 0.0
@@ -56,7 +57,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	# kick us straight back out.
 	if event.is_action_pressed("interact") and _nearby_vehicle != null and not _breaking_into:
 		get_viewport().set_input_as_handled()
-		if _nearby_vehicle.locked:
+		if _nearby_vehicle.has_method("hijack"):
+			# AI traffic: the driver is thrown out and we take the car.
+			var stolen: Vehicle = _nearby_vehicle.hijack()
+			_nearby_vehicle = null
+			enter_vehicle(stolen)
+		elif _nearby_vehicle.locked:
 			_start_break_in(_nearby_vehicle)
 		else:
 			enter_vehicle(_nearby_vehicle)
@@ -121,23 +127,26 @@ func get_facing_yaw() -> float:
 
 # --- Vehicles ---------------------------------------------------------------
 
-## Finds the closest free vehicle whose door is within reach and updates the HUD.
+## Finds the closest free vehicle (parked or AI traffic) whose door is within
+## reach and updates the HUD.
 func _update_nearby_vehicle() -> void:
-	var best: Vehicle = null
+	var best: Node3D = null
 	var best_dist := vehicle_reach
-	for node in get_tree().get_nodes_in_group("vehicles"):
-		var vehicle := node as Vehicle
-		if vehicle == null or vehicle.has_driver():
-			continue
-		var dist := global_position.distance_to(vehicle.get_door_position())
-		if dist < best_dist:
-			best_dist = dist
-			best = vehicle
+	for group in ["vehicles", "traffic_cars"]:
+		for node in get_tree().get_nodes_in_group(group):
+			if node.has_driver():
+				continue
+			var dist := global_position.distance_to(node.get_door_position())
+			if dist < best_dist:
+				best_dist = dist
+				best = node
 
 	if best != _nearby_vehicle:
 		_nearby_vehicle = best
 		if best == null:
 			interaction_hint_changed.emit("")
+		elif best.has_method("hijack"):
+			interaction_hint_changed.emit("Press F to carjack the %s" % best.display_name)
 		elif best.locked:
 			interaction_hint_changed.emit("Press F to steal the %s (locked)" % best.display_name)
 		else:

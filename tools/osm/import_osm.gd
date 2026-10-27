@@ -28,6 +28,9 @@ var _buildings: Array[Dictionary] = []   # {ring: PackedVector2Array, h, color, 
 var _greens: Array[Dictionary] = []      # {ring, kind}
 var _roads: Array[Dictionary] = []       # {pts: PackedVector2Array, w, kind, cls}
 var _coast: Array[PackedVector2Array] = []
+var _signal_points := PackedVector2Array()   # OSM traffic_signals nodes.
+var _gnode_ids := {}                         # Road graph: point key -> node id
+var _gnode_pos := PackedVector2Array()
 
 # Area rectangles in local metres, same order as OsmConfig.AREAS.
 var _area_rects: Array[Rect2] = []
@@ -63,7 +66,9 @@ func _initialize() -> void:
 	_build_land_mask()
 	var skyline := _distribute()
 	var manifest := _make_manifest()
+	var traffic := _build_road_graph()
 	_write(manifest, skyline)
+	_save_json(_out_dir.path_join("traffic.json"), traffic)
 	print("Import finished in %.1f s: %d chunks, %d skyline buildings -> %s"
 		% [(Time.get_ticks_msec() - t0) / 1000.0, _chunks.size(), skyline.size(), _out_dir])
 	quit(0)
@@ -123,6 +128,8 @@ func _parse(elements: Array) -> void:
 				_add_building(pts, tags, int(el["id"]))
 			else:
 				_add_green(pts, tags)
+		elif type == "node" and tags.get("highway", "") == "traffic_signals":
+			_signal_points.append(OsmConfig.project(el["lat"], el["lon"]))
 		elif type == "relation" and tags.has("building"):
 			# Multipolygon building: join the outer member ways into rings.
 			# Inner rings (courtyards) are ignored; the roof covers them.
@@ -250,7 +257,18 @@ func _parse_road(pts: PackedVector2Array, tags: Dictionary) -> void:
 	var cls := 0
 	if kind in OsmConfig.CAR_ROADS:
 		cls = 2 if kind.get_slice("_", 0) in ["motorway", "trunk", "primary", "secondary"] else 1
-	_roads.append({"pts": pts, "w": w, "kind": kind, "cls": cls})
+	# One-way streets: "yes"/"1"/"true", roundabouts and motorways, or "-1"
+	# (one-way against the drawing direction, so flip the points).
+	var oneway := 0
+	var ow := String(tags.get("oneway", ""))
+	if ow == "-1":
+		oneway = 1
+		pts = pts.duplicate()
+		pts.reverse()
+	elif ow in ["yes", "1", "true"] or tags.get("junction", "") in ["roundabout", "circular"] \
+			or (kind.begins_with("motorway") and ow != "no"):
+		oneway = 1
+	_roads.append({"pts": pts, "w": w, "kind": kind, "cls": cls, "oneway": oneway})
 
 
 func _building_height(tags: Dictionary, id: int, area_idx: int) -> float:
@@ -465,7 +483,8 @@ func _distribute() -> Array:
 	return skyline
 
 
-## Kerb-side parking spots along car roads (not motorways), skipping the ends
+## Half-on-the-pavement parking spots (as Casablanca drivers do, and it keeps
+## the traffic lanes free) along car roads (not motorways), skipping the ends
 ## of each way, which are usually junctions. Stored per chunk as flat
 ## [x_dm, z_dm, yaw_milliradians, ...] under "s".
 func _add_parking_spots() -> void:
@@ -486,7 +505,7 @@ func _add_parking_spots() -> void:
 			while next_spot <= travelled + seg and next_spot < total - 15.0:
 				var dir := (b - a) / seg
 				var right := Vector2(-dir.y, dir.x)   # Right-hand side of the road.
-				var p: Vector2 = a.lerp(b, (next_spot - travelled) / seg) + right * maxf(r["w"] * 0.5 - 1.2, 1.0)
+				var p: Vector2 = a.lerp(b, (next_spot - travelled) / seg) + right * (r["w"] * 0.5 + 0.6)
 				if _is_land(p):
 					var c := _chunk(_chunk_key(p))
 					if not c.has("s"):
@@ -571,6 +590,119 @@ func _encode(pts: PackedVector2Array) -> Array:
 	return out
 
 
+# --- Road graph (AI traffic and pedestrians) ------------------------------------
+
+## Splits every road at junctions into graph edges. OSM ways that meet share a
+## node, i.e. the exact same coordinates, so points are matched by position
+## (rounded to 0.5 m). Written to traffic.json in decimetres:
+##   nodes:   [x, z, ...]
+##   edges:   [[a, b, class, kind, oneway, width, [x, z, ...]], ...]
+##            kind 0 = walk only, 1 = street, 2 = fast road (no pedestrians)
+##   signals: [node ids with traffic lights]
+func _build_road_graph() -> Dictionary:
+	var usage := {}
+	for r in _roads:
+		var pts: PackedVector2Array = r["pts"]
+		for i in pts.size():
+			var k := _point_key(pts[i])
+			# Way ends always become nodes; shared points become junctions.
+			usage[k] = usage.get(k, 0) + (2 if i == 0 or i == pts.size() - 1 else 1)
+
+	_gnode_ids.clear()
+	_gnode_pos.clear()
+	var edges := []
+	var edge_major := []     # Per edge: counts toward "major junction".
+	for r in _roads:
+		var pts: PackedVector2Array = r["pts"]
+		var kind: String = r["kind"]
+		var kind_code := 1
+		if r["cls"] == 0:
+			kind_code = 0
+		elif kind.begins_with("motorway") or kind.begins_with("trunk"):
+			kind_code = 2
+		var a := _graph_node(pts[0])
+		var cur := PackedVector2Array([pts[0]])
+		for i in range(1, pts.size()):
+			cur.append(pts[i])
+			if usage[_point_key(pts[i])] < 2 and i < pts.size() - 1:
+				continue
+			var b := _graph_node(pts[i])
+			if cur.size() >= 2 and _polyline_length(cur) > 0.5:
+				edges.append([a, b, r["cls"], kind_code, r["oneway"], roundi(r["w"] * DM), _encode(cur)])
+				edge_major.append(r["cls"] == 2 or kind.begins_with("tertiary"))
+			cur = PackedVector2Array([pts[i]])
+			a = b
+
+	var node_pos := _gnode_pos
+	# Degree and number of major roads at every junction.
+	var degree := PackedInt32Array()
+	var majors := PackedInt32Array()
+	degree.resize(node_pos.size())
+	majors.resize(node_pos.size())
+	for i in edges.size():
+		if edges[i][3] == 0:
+			continue   # Footways don't make a junction need lights.
+		for end in [edges[i][0], edges[i][1]]:
+			degree[end] += 1
+			if edge_major[i]:
+				majors[end] += 1
+
+	var candidates := []   # [score, node]
+	if not _signal_points.is_empty():
+		# Real lights from OSM, moved onto the junction they control.
+		for sp in _signal_points:
+			var best := -1
+			var best_d := OsmConfig.SIGNAL_SNAP
+			for n in node_pos.size():
+				if degree[n] >= 3:
+					var d := node_pos[n].distance_to(sp)
+					if d < best_d:
+						best_d = d
+						best = n
+			if best >= 0:
+				candidates.append([degree[best], best])
+	else:
+		# A main road merely passing through counts 2 major arms; lights go
+		# where main roads actually cross or meet (3+ major arms).
+		for n in node_pos.size():
+			if degree[n] >= 3 and majors[n] >= 3:
+				candidates.append([degree[n] + majors[n], n])
+	candidates.sort_custom(func(x, y): return x[0] > y[0])
+	var signals := []
+	var spacing := OsmConfig.SIGNAL_MIN_SPACING * (1.0 if not _signal_points.is_empty() else 1.8)
+	for c in candidates:
+		var ok := true
+		for s in signals:
+			if node_pos[s].distance_to(node_pos[c[1]]) < spacing:
+				ok = false
+				break
+		if ok:
+			signals.append(c[1])
+
+	print("Road graph: %d junctions, %d roads, %d traffic lights (%s)." % [node_pos.size(), edges.size(),
+		signals.size(), "from OSM" if not _signal_points.is_empty() else "major crossroads"])
+	return {"nodes": _encode(node_pos), "edges": edges, "signals": signals}
+
+
+func _point_key(p: Vector2) -> Vector2i:
+	return Vector2i(roundi(p.x * 2.0), roundi(p.y * 2.0))
+
+
+func _graph_node(p: Vector2) -> int:
+	var k := _point_key(p)
+	if not _gnode_ids.has(k):
+		_gnode_ids[k] = _gnode_pos.size()
+		_gnode_pos.append(p)
+	return _gnode_ids[k]
+
+
+func _polyline_length(pts: PackedVector2Array) -> float:
+	var l := 0.0
+	for i in pts.size() - 1:
+		l += pts[i].distance_to(pts[i + 1])
+	return l
+
+
 # --- Manifest -----------------------------------------------------------------
 
 func _make_manifest() -> Dictionary:
@@ -582,7 +714,9 @@ func _make_manifest() -> Dictionary:
 	for i in OsmConfig.AREAS.size():
 		var r := _area_rects[i]
 		areas.append({"name": OsmConfig.AREAS[i]["name"],
-			"rect": [r.position.x, r.position.y, r.end.x, r.end.y]})
+			"rect": [r.position.x, r.position.y, r.end.x, r.end.y],
+			"traffic": OsmConfig.AREAS[i].get("traffic", 1.0),
+			"pedestrians": OsmConfig.AREAS[i].get("pedestrians", 1.0)})
 
 	var keys := _chunks.keys()
 	keys.sort()

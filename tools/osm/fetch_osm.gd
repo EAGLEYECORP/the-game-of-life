@@ -55,10 +55,10 @@ func _build_jobs(args: Dictionary) -> Array:
 	# Coastline gets ~1 km of margin so the land/sea mask is right at the edges.
 	var coast := [u[0] - 0.01, u[1] - 0.012, u[2] + 0.01, u[3] + 0.012]
 	jobs.append({
-		"label": "roads + coastline",
+		"label": "roads, traffic lights + coastline",
 		"file": "roads_coast.json",
-		"query": "[out:json][timeout:%d];\n(\n  way[\"highway\"](%s);\n  way[\"natural\"=\"coastline\"](%s);\n);\nout geom;"
-			% [TIMEOUT_S, _bbox_str(u), _bbox_str(coast)],
+		"query": "[out:json][timeout:%d];\n(\n  way[\"highway\"](%s);\n  node[\"highway\"=\"traffic_signals\"](%s);\n  way[\"natural\"=\"coastline\"](%s);\n);\nout geom;"
+			% [TIMEOUT_S, _bbox_str(u), _bbox_str(u), _bbox_str(coast)],
 	})
 
 	var boxes := []

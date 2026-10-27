@@ -70,6 +70,73 @@ is never removed. One of each type also waits next to the spawn point.
 The camera glides to each vehicle's own framing when you get in. The scooter
 sits close and low, the limousine further back. The FOV widens with speed.
 
+## City life: traffic, pedestrians, traffic lights
+
+`scripts/traffic/` brings the streets to life around the player.
+
+**AI traffic** (`traffic_car.gd`) follows the real road network. It drives on
+the right, respects one-way streets, picks turns at junctions (preferring main
+roads) and slows for corners and for anything ahead. State machine:
+- `DRIVE`: normal driving.
+- `WAIT_LIGHT`: stopped at a red light.
+- `BLOCKED`: something is in the way. If it's you, the driver leans on the horn
+  after 1.5 s.
+- `PANIC`: you rammed it. It honks, then speeds off ignoring lights for 6 s.
+
+Press **F** at an AI car's door to **carjack** it. The car becomes a normal
+drivable vehicle and its driver jumps out and runs.
+
+**Pedestrians** (`pedestrian.gd`) walk the pavements beside roads and the
+middle of footways, pausing now and then. State machine:
+- `WALK` and `IDLE`: normal walking and pausing.
+- `SIDESTEP`: you walked into them.
+- `FLEE`: a car is coming at them; they dive aside.
+- `KNOCKED` and `GET_UP`: hit by your car. They fall over, get up and run, and
+  people nearby scatter too.
+
+About a third wear djellabas.
+
+**Traffic lights** (`road_graph.gd`) go on OSM's tagged `traffic_signals`
+junctions, or on crossings of main roads when the data has none. Each junction
+splits its roads into two groups running a 33 s cycle (green 12 s, amber 3 s,
+all-red 1.5 s, then the other group). Posts are built only within 220 m of the
+player.
+
+**Density** follows the district (`traffic` / `pedestrians` in
+`OsmConfig.AREAS`):
+
+| District | Traffic | Pedestrians |
+|---|---|---|
+| Corniche - Ain Diab | 1.6× | 1.4× |
+| Downtown (Art Deco) | 1.6× | 1.3× |
+| Twin Center - Maarif | 1.3× | 1.1× |
+| Hassan II Mosque | 1.0× | 1.2× |
+| Old Medina | 0.35× (narrow lanes) | 1.6× |
+
+**Performance**:
+- One `TrafficManager` loop moves every agent. Decisions run 10 times a second
+  per agent, spread evenly across frames.
+- AI cars are kinematic bodies with no wheel physics, each a single pre-baked,
+  vertex-coloured mesh (one draw call instead of about 30). Pedestrians have no
+  physics at all, and their limbs only animate within 60 m.
+- Agents exist only in a ring around the player. Cars spawn 90–240 m away and
+  are recycled past 300 m; pedestrians spawn 45–130 m away and are recycled
+  past 160 m.
+- "What's ahead?" checks use a 12 m spatial grid rebuilt once per frame.
+- Light states are a pure function of time.
+- Parked cars spawn a few per frame instead of all at once.
+
+In testing, the traffic system cost about 0.6 ms per physics frame on average
+with 34 cars and 50 pedestrians.
+
+Tune `max_cars`, `max_pedestrians`, the spawn rings and `light_radius` on the
+`Traffic` node in `main.tscn`. Parked cars sit half on the pavement, Casablanca
+style, so they stay out of the traffic lanes.
+
+> Traffic needs `maps/casablanca_osm/traffic.json`, written by the importer.
+> If you imported before this feature, re-run both OSM steps (the fetch now
+> also downloads traffic lights). The placeholder city has traffic built in.
+
 ## The map: real Casablanca from OpenStreetMap
 
 The world is built from [OpenStreetMap](https://www.openstreetmap.org) data and
@@ -151,8 +218,11 @@ will use it.
 - **Spawn**: the configured point is snapped to the nearest road and turned to
   face the nearest sea. Five starter spots are picked on nearby streets, on the
   right-hand side of the road.
-- **Parking spots**: one every 45 m along car roads, kerb side, stored per
-  chunk for `VehicleSpawner`.
+- **Parking spots**: one every 45 m along car roads, half on the pavement,
+  stored per chunk for `VehicleSpawner`.
+- **Road graph** (`traffic.json`): roads split at shared OSM nodes into
+  junctions and edges, with width, class, one-way and pedestrian-only flags,
+  plus the traffic-light junctions.
 
 Everything you'd want to tweak (areas, spawn, heights, road widths, chunk size)
 is in `tools/osm/osm_config.gd`. Change it and re-run step 2 (and step 1 if you
@@ -203,6 +273,11 @@ scripts/
   vehicles/sound_synth.gd      Generates horn/engine sounds in code
   vehicles/vehicle_damage.gd   Visual damage: dents, smoke, cracked glass
   vehicles/vehicle_spawner.gd  Parks stealable vehicles around the streamed map
+  traffic/traffic_manager.gd   Spawns/updates AI cars, pedestrians, light posts
+  traffic/traffic_car.gd       AI car: lane following + state machine
+  traffic/pedestrian.gd        Pedestrian: pavement walking + state machine
+  traffic/road_graph.gd        Road network, lanes, junction choices, light timing
+  traffic/npc_visuals.gd       Baked NPC meshes (cars, people, light posts)
   camera/camera_rig.gd      Orbit, collision, per-mode framing, auto-recentre
   ui/hud.gd
   world/osm/chunk_streamer.gd  Loads/unloads map chunks around the player
@@ -215,7 +290,7 @@ tools/osm/
 maps/
   casablanca.tscn           Sky, sun, sea and the ChunkStreamer
   placeholder_city.tscn     Fallback city used when no OSM data is imported
-  casablanca_osm/           Generated by import_osm.gd (manifest, skyline, chunks)
+  casablanca_osm/           Generated by import_osm.gd (manifest, skyline, traffic, chunks)
 data/osm/raw/               Raw Overpass downloads (git-ignored)
 assets/                     models/, textures/, audio/, fonts/ (empty for now)
 ```

@@ -79,10 +79,12 @@ func _build() -> void:
 
 ## Parking spots along every road, on the right-hand side, skipping
 ## intersections. Used by VehicleSpawner: [{pos: Vector3, yaw: float}].
+## Cars park half on the pavement, Casablanca style, which keeps the traffic
+## lanes clear for AI cars.
 func get_parking_spots() -> Array:
 	var spots := []
 	var half := cell_size * blocks_per_side * 0.5
-	var lane := road_width * 0.3
+	var lane := road_width * 0.5 + 0.6
 	for i in blocks_per_side + 1:
 		var offset := -half + cell_size * i
 		var d := -half + 15.0
@@ -95,6 +97,34 @@ func get_parking_spots() -> Array:
 				spots.append({"pos": Vector3(offset + lane, 0.7, -d), "yaw": PI})
 			d += 22.0
 	return spots
+
+
+## The street grid as a road graph for AI traffic and pedestrians, in the
+## same layout as the OSM importer's traffic.json (metres). Every second
+## junction gets traffic lights; every fourth road is a main boulevard.
+func get_road_graph() -> Dictionary:
+	var half := cell_size * blocks_per_side * 0.5
+	var n := blocks_per_side + 1
+	var nodes := []
+	for j in n:
+		for i in n:
+			nodes.append_array([-half + cell_size * i, -half + cell_size * j])
+	var edges := []
+	for j in n:
+		for i in n:
+			var id := j * n + i
+			var p := Vector2(nodes[id * 2], nodes[id * 2 + 1])
+			if i < n - 1:   # Road along X (line j).
+				edges.append([id, id + 1, 2 if j % 4 == 0 else 1, 1, 0, road_width,
+					[p.x, p.y, p.x + cell_size, p.y]])
+			if j < n - 1:   # Road along Z (line i).
+				edges.append([id, id + n, 2 if i % 4 == 0 else 1, 1, 0, road_width,
+					[p.x, p.y, p.x, p.y + cell_size]])
+	var signals := []
+	for j in range(0, n, 2):
+		for i in range(0, n, 2):
+			signals.append(j * n + i)
+	return {"nodes": nodes, "edges": edges, "signals": signals}
 
 
 # --- Terrain ---------------------------------------------------------------

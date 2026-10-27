@@ -130,6 +130,21 @@ func key_at(pos: Vector3) -> String:
 	return _key_at(pos) if has_data else "fallback"
 
 
+## A per-district number from the manifest (e.g. "traffic" or "pedestrians"
+## density), or `default` outside every district / without OSM data.
+func get_area_value(pos: Vector3, key: String, default: float) -> float:
+	for area in manifest.get("areas", []):
+		var r: Array = area["rect"]
+		if pos.x >= r[0] and pos.x <= r[2] and pos.z >= r[1] and pos.z <= r[3]:
+			return area.get(key, default)
+	return default
+
+
+## The placeholder city node when running without OSM data, else null.
+func get_fallback() -> Node:
+	return _fallback
+
+
 ## Name of the district containing `pos`, or "" outside every area.
 func get_area_name(pos: Vector3) -> String:
 	for area in manifest.get("areas", []):

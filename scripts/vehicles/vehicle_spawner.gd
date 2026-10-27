@@ -29,6 +29,11 @@ var _by_chunk := {}          # Chunk key -> Array[Vehicle] spawned there
 var _keep: Vehicle = null    # Last vehicle the player drove.
 var _rng := RandomNumberGenerator.new()
 var _total_weight := 0.0
+# Spawns waiting to happen: [chunk key, spot]. A chunk can bring dozens of
+# parking spots; creating that many physics vehicles in one frame would stall,
+# so they trickle in a few per frame.
+var _queue: Array = []
+const SPAWNS_PER_FRAME := 3
 
 
 func _ready() -> void:
@@ -45,24 +50,35 @@ func _ready() -> void:
 func _on_chunk_loaded(key: String, spots: Array) -> void:
 	if vehicle_scenes.is_empty():
 		return
-	var list: Array = _by_chunk.get(key, [])
-	_by_chunk.erase(key)
-	var alive := _count()
 	for spot: Dictionary in spots:
-		if alive + list.size() >= max_vehicles:
-			break
-		if _rng.randf() > density or not _is_clear(spot["pos"]):
+		if _rng.randf() <= density:
+			_queue.append([key, spot])
+
+
+func _physics_process(_delta: float) -> void:
+	for i in SPAWNS_PER_FRAME:
+		if _queue.is_empty():
+			return
+		var item: Array = _queue.pop_front()
+		var key: String = item[0]
+		var spot: Dictionary = item[1]
+		# The chunk may have streamed out again while this waited.
+		if streamer and streamer.has_data and not streamer.is_loaded_at(spot["pos"]):
+			continue
+		if _count() >= max_vehicles or not _is_clear(spot["pos"]):
 			continue
 		var vehicle := _pick_scene().instantiate() as Vehicle
 		vehicle.spawned = true
 		vehicle.locked = _rng.randf() < locked_chance
 		add_child(vehicle)
 		vehicle.global_transform = Transform3D(Basis(Vector3.UP, spot["yaw"]), spot["pos"])
-		list.append(vehicle)
-	_by_chunk[key] = list
+		if not _by_chunk.has(key):
+			_by_chunk[key] = []
+		_by_chunk[key].append(vehicle)
 
 
 func _on_chunk_unloaded(key: String) -> void:
+	_queue = _queue.filter(func(item: Array) -> bool: return item[0] != key)
 	# Vehicles move, so free the ones that are *now* on this chunk, wherever
 	# they were spawned.
 	for chunk_key: String in _by_chunk.keys():
