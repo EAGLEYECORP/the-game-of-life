@@ -20,12 +20,16 @@ extends Node3D
 
 var _engine: AudioStreamPlayer3D
 var _horn: AudioStreamPlayer3D
+var _siren: AudioStreamPlayer3D
 
 
 func _ready() -> void:
 	_engine = _make_player("Engine", SoundSynth.engine(engine_style), engine_volume_db)
 	_horn = _make_player("Horn", SoundSynth.horn(horn_style), horn_volume_db)
 	_horn.max_distance = 150.0
+	if _vehicle.is_police:
+		_siren = _make_player("Siren", SoundSynth.siren(), -2.0)
+		_siren.max_distance = 250.0
 
 
 func _process(delta: float) -> void:
@@ -35,6 +39,11 @@ func _process(delta: float) -> void:
 		_horn.play()
 	elif not honk and _horn.playing:
 		_horn.stop()
+	if _siren:
+		if _vehicle.siren_on and not _siren.playing:
+			_siren.play()
+		elif not _vehicle.siren_on and _siren.playing:
+			_siren.stop()
 
 
 func _update_engine(delta: float) -> void:

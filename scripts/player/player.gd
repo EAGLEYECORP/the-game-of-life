@@ -10,6 +10,9 @@ extends CharacterBody3D
 signal vehicle_entered(vehicle: Vehicle)
 ## Emitted when the player gets out of a vehicle.
 signal vehicle_exited(vehicle: Vehicle)
+## Emitted for crimes the player commits directly ("break_in", ...), for the
+## wanted system.
+signal crime_committed(kind: String, pos: Vector3)
 ## Emitted when the on-screen interaction hint changes ("" = hide it).
 signal interaction_hint_changed(text: String)
 
@@ -181,6 +184,7 @@ func _update_break_in(delta: float) -> void:
 		_breaking_into = null
 		vehicle.locked = false
 		vehicle.start_alarm()
+		crime_committed.emit("break_in", vehicle.global_position)
 		enter_vehicle(vehicle)
 
 

@@ -49,6 +49,9 @@ var _state_time := 0.0
 var _honk_cooldown := 0.0
 var _player_block_time := 0.0   # How long the player has been in our way.
 var _last_think := 0.0
+## 0..1: pulled over to the kerb for a police car with its siren on.
+var _pull_over := 0.0
+var _pull_over_target := 0.0
 var _horn: AudioStreamPlayer3D
 
 
@@ -99,6 +102,10 @@ func think(t: float) -> void:
 	var dt := clampf(t - _last_think, 0.0, 0.5)
 	_last_think = t
 	var limit := _graph.speed_limit(_edge) * _personality
+	# A siren close by: move over to the right and crawl.
+	_pull_over_target = 1.0 if _manager.siren_near(global_position, 28.0) else 0.0
+	if _pull_over_target > 0.0:
+		limit = minf(limit, 3.0)
 	# Slow down for the corner at the end of this road.
 	if _next_edge >= 0 and _next_edge != _edge:
 		limit = minf(limit, sqrt(36.0 + 2.0 * 3.0 * _remaining))
@@ -269,4 +276,8 @@ func _place(snap: bool) -> void:
 	if d.length_squared() > 0.0001:
 		var target := atan2(d.x, d.y)
 		_yaw = target if snap else lerp_angle(_yaw, target, clampf(speed * 0.5 * get_physics_process_delta_time(), 0.0, 1.0))
+	_pull_over = move_toward(_pull_over, _pull_over_target, get_physics_process_delta_time() * 0.8)
+	if _pull_over > 0.0:
+		var dir := Vector2(sin(_yaw), cos(_yaw))
+		p += Vector2(-dir.y, dir.x) * _pull_over * 2.2   # Right-hand kerb.
 	global_transform = Transform3D(Basis(Vector3.UP, _yaw), Vector3(p.x, 0.06 + _ride, p.y))

@@ -70,8 +70,21 @@ signal driver_changed(driver: Player)
 @export var camera_height := 1.6
 @export var camera_fov := 72.0
 
+@export_group("Police")
+## Police vehicle: siren and light bar, crimes against it count double.
+@export var is_police := false
+
 ## The player currently driving, or null.
 var driver: Player = null
+
+## AI driving (police): set ai_controlled and write the ai_* inputs each frame
+## instead of the keyboard. An AI-driven vehicle counts as occupied.
+var ai_controlled := false
+var ai_throttle := 0.0       ## 0..1
+var ai_reverse := 0.0        ## 0..1
+var ai_steer := 0.0          ## -1..1, positive = left
+var ai_handbrake := false
+var siren_on := false
 ## Locked parked cars must be broken into (takes a moment, sets off the alarm).
 var locked := false
 ## Spawned by VehicleSpawner (as opposed to placed in the level).
@@ -113,12 +126,13 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if driver:
+	if driver or ai_controlled:
 		_read_controls(delta)
+	if driver:
 		# Keep the hidden player glued to the seat so anything that asks "where
 		# is the player?" (map streaming, HUD) gets a sensible answer.
 		driver.global_position = _seat.global_position
-	else:
+	elif not ai_controlled:
 		throttle = 0.0
 		engine_force = 0.0
 		steering = move_toward(steering, 0.0, steer_speed * delta)
@@ -147,11 +161,16 @@ func _unhandled_input(event: InputEvent) -> void:
 # --- Driving ------------------------------------------------------------------
 
 func _read_controls(delta: float) -> void:
-	var want_throttle := Input.get_action_strength("move_forward")
-	var reverse := Input.get_action_strength("move_back")
-	var steer_input := Input.get_axis("move_right", "move_left") # Left = positive.
-	_handbrake = Input.is_action_pressed("handbrake")
-	horn_pressed = Input.is_action_pressed("horn")
+	var want_throttle := ai_throttle
+	var reverse := ai_reverse
+	var steer_input := ai_steer
+	_handbrake = ai_handbrake
+	if driver:
+		want_throttle = Input.get_action_strength("move_forward")
+		reverse = Input.get_action_strength("move_back")
+		steer_input = Input.get_axis("move_right", "move_left") # Left = positive.
+		_handbrake = Input.is_action_pressed("handbrake")
+		horn_pressed = Input.is_action_pressed("horn")
 
 	# Ramp keyboard throttle so tapping W doesn't spin the wheels.
 	throttle = move_toward(throttle, want_throttle, throttle_response * delta)
@@ -246,8 +265,9 @@ func flip_upright() -> void:
 
 # --- Interface used by the Player, camera, HUD and components -----------------
 
+## True when the player or an AI is driving.
 func has_driver() -> bool:
-	return driver != null
+	return driver != null or ai_controlled
 
 
 func set_driver(new_driver: Player) -> void:

@@ -10,6 +10,10 @@ extends CanvasLayer
 @onready var _district: Label = $District
 @onready var _notice: Label = $Notice
 @onready var _attribution: Label = $Attribution
+@onready var minimap: Minimap = $Minimap
+@onready var wanted_stars: WantedStars = $WantedStars
+
+var _notice_timer := 0.0
 
 ## Vehicle shown on the speedometer, or null when on foot.
 var _vehicle: Vehicle = null
@@ -26,7 +30,11 @@ func _ready() -> void:
 	set_attribution("")
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _notice_timer > 0.0:
+		_notice_timer -= delta
+		if _notice_timer <= 0.0:
+			set_notice("")
 	if _vehicle:
 		_speedo.text = "%d km/h" % roundi(_vehicle.get_speed_kmh())
 		var damage := _vehicle.get_node_or_null("Damage") as VehicleDamage
@@ -61,3 +69,9 @@ func set_notice(text: String) -> void:
 ## Data credit. OpenStreetMap's licence (ODbL) requires showing it.
 func set_attribution(text: String) -> void:
 	_attribution.text = text
+
+
+## Shows a centre message for `seconds`, then hides it ("BUSTED", ...).
+func flash_notice(text: String, seconds: float) -> void:
+	set_notice(text)
+	_notice_timer = seconds

@@ -16,6 +16,11 @@ extends Node3D
 ## Density follows the district (see OsmConfig.AREAS: "traffic" and
 ## "pedestrians"): busy on the Corniche and downtown, few cars in the Medina.
 
+## The player's car knocked someone down (for the wanted system).
+signal pedestrian_hit(pos: Vector3)
+## The player dragged a driver out of an AI car.
+signal carjacked(pos: Vector3)
+
 @export var streamer: ChunkStreamer
 @export var player: Player
 
@@ -57,6 +62,7 @@ var _posts := {}                         # node id -> Array of [Node3D, edge, la
 var _total_weight := 0.0
 var _fill_ticks := 0
 var _last_player_vehicle: Vehicle
+var _police: Array[Node] = []            # Cached once per frame.
 
 
 func _ready() -> void:
@@ -185,6 +191,14 @@ func scare_pedestrians(pos: Vector2, radius: float) -> void:
 			ped.scare(pos)
 
 
+## True if a police car with its siren on is within `radius` of `pos`.
+func siren_near(pos: Vector3, radius: float) -> bool:
+	for v in _police:
+		if is_instance_valid(v) and v.siren_on and v.global_position.distance_to(pos) < radius:
+			return true
+	return false
+
+
 func request_despawn(car: TrafficCar) -> void:
 	if not car in _despawn_queue:
 		_despawn_queue.append(car)
@@ -193,6 +207,7 @@ func request_despawn(car: TrafficCar) -> void:
 ## Replaces an AI car with a real drivable Vehicle in the same spot, and drops
 ## its driver on the pavement running away. Used for carjacking.
 func convert_to_vehicle(car: TrafficCar) -> Vehicle:
+	carjacked.emit(car.global_position)
 	var scene: PackedScene = car.template["scene"]
 	var v := scene.instantiate() as Vehicle
 	v.randomize_paint = false
@@ -333,6 +348,10 @@ func _rebuild_grid() -> void:
 	var pv := player.current_vehicle
 	var pp := player.global_position
 	_grid_add(Vector2(pp.x, pp.z), 1.0 if pv else 0.5, pv if pv else player, true)
+	# Police cars (real physics vehicles): traffic must not drive into them.
+	_police = get_tree().get_nodes_in_group("police")
+	for v in _police:
+		_grid_add(Vector2(v.global_position.x, v.global_position.z), 1.0, v, false)
 	for v in _converted:
 		if is_instance_valid(v) and v != pv:
 			_grid_add(Vector2(v.global_position.x, v.global_position.z), 1.0, v, false)

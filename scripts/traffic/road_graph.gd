@@ -240,6 +240,108 @@ func signals_near(center: Vector2, radius: float) -> PackedInt32Array:
 	return out
 
 
+## Edge ids with any part within roughly `radius` of `pos` (for the minimap).
+func edges_near(pos: Vector2, radius: float) -> PackedInt32Array:
+	var seen := {}
+	var c0 := Vector2i(((pos - Vector2.ONE * radius) / BUCKET).floor())
+	var c1 := Vector2i(((pos + Vector2.ONE * radius) / BUCKET).floor())
+	for cx in range(c0.x, c1.x + 1):
+		for cy in range(c0.y, c1.y + 1):
+			for b in [_drive_buckets, _walk_buckets]:
+				for e in b.get(Vector2i(cx, cy), PackedInt32Array()):
+					seen[e] = true
+	return PackedInt32Array(seen.keys())
+
+
+# --- Pathfinding (police) ------------------------------------------------------
+
+## Closest junction to `pos` reachable by car (searches nearby buckets), or -1.
+func nearest_node(pos: Vector2, walking := false) -> int:
+	var buckets := _walk_buckets if walking else _drive_buckets
+	var c := Vector2i((pos / BUCKET).floor())
+	var best := -1
+	var best_d := INF
+	for ring in 3:
+		for dx in range(-ring, ring + 1):
+			for dy in range(-ring, ring + 1):
+				if maxi(absi(dx), absi(dy)) != ring:
+					continue
+				for e in buckets.get(c + Vector2i(dx, dy), PackedInt32Array()):
+					for n in [edge_a[e], edge_b[e]]:
+						var d := nodes[n].distance_squared_to(pos)
+						if d < best_d:
+							best_d = d
+							best = n
+		if best >= 0:
+			return best
+	return best
+
+
+## Dijkstra outward from `target` over drivable roads, ignoring one-way rules
+## (emergency vehicles). Stops after `max_nodes` junctions. Returns
+## {"dist": node -> metres to target, "next": node -> edge to take}; nodes not
+## reached are missing. Every chasing car reads the same field, so one search
+## serves the whole police force.
+func flow_field(target: int, max_nodes: int) -> Dictionary:
+	var dist := {target: 0.0}
+	var next := {}
+	var done := {}
+	var heap: Array = [[0.0, target]]   # Binary min-heap of [dist, node].
+	while not heap.is_empty() and done.size() < max_nodes:
+		var top: Array = _heap_pop(heap)
+		var n: int = top[1]
+		if done.has(n):
+			continue
+		done[n] = true
+		for e in node_edges[n]:
+			if not is_drivable(e):
+				continue
+			var m := other_end(e, n)
+			var nd: float = top[0] + edge_length[e]
+			if nd < dist.get(m, INF):
+				dist[m] = nd
+				next[m] = e      # From m, drive along e to get closer.
+				_heap_push(heap, [nd, m])
+	return {"dist": dist, "next": next}
+
+
+static func _heap_push(heap: Array, item: Array) -> void:
+	heap.append(item)
+	var i := heap.size() - 1
+	while i > 0:
+		var parent := (i - 1) >> 1
+		if heap[parent][0] <= heap[i][0]:
+			break
+		var tmp = heap[parent]
+		heap[parent] = heap[i]
+		heap[i] = tmp
+		i = parent
+
+
+static func _heap_pop(heap: Array) -> Array:
+	var top: Array = heap[0]
+	var last: Array = heap.pop_back()
+	if heap.is_empty():
+		return top
+	heap[0] = last
+	var i := 0
+	while true:
+		var l := i * 2 + 1
+		var r := l + 1
+		var m := i
+		if l < heap.size() and heap[l][0] < heap[m][0]:
+			m = l
+		if r < heap.size() and heap[r][0] < heap[m][0]:
+			m = r
+		if m == i:
+			break
+		var tmp = heap[m]
+		heap[m] = heap[i]
+		heap[i] = tmp
+		i = m
+	return top
+
+
 # --- Internals ----------------------------------------------------------------
 
 func _index_edge(id: int) -> void:

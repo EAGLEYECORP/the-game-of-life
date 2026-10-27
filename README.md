@@ -137,6 +137,61 @@ style, so they stay out of the traffic lanes.
 > If you imported before this feature, re-run both OSM steps (the fetch now
 > also downloads traffic lights). The placeholder city has traffic built in.
 
+## Wanted level and police
+
+`scripts/police/` adds a 1–5 star wanted system, shown as stars in the top
+right.
+
+**Crimes** add "heat" measured in stars (`wanted_system.gd`):
+
+| Crime | Heat | Minimum |
+|---|---|---|
+| Hitting another car (only if you drove into it) | +0.35 | — |
+| Knocking down a pedestrian | +1 | 1★ |
+| Ramming a police car | +1 | 2★ |
+| Carjacking an AI driver | +0.6 | — |
+| Breaking into a locked car | +0.3 | — |
+| Shooting (`report_crime("shooting", pos)`, for later) | +1 | 1★ |
+
+Crimes count double when police see them. A chase in plain sight slowly adds
+heat on its own. Heat below one star fades away.
+
+**Escaping**: police need line of sight, checked with raycasts against
+buildings, within 85 m plus 15 m per star. Once nobody can see you, the stars
+flash, and after 10 s + 4 s per star you lose **one** star. Stay hidden to
+keep dropping.
+
+**Police** (`police_manager.gd`) dispatch 2/3/4/5/7 cars for 1–5 stars. They
+spawn out of sight on the road network and drive real physics cars (white with
+blue stripes, red/blue light bar, two-tone siren), so they can ram you and you
+can ram them. AI traffic pulls over to the kerb when a siren comes up behind.
+
+- **Pathfinding**: a single Dijkstra "flow field" over the road graph spreads
+  out from your junction and is refreshed every second. Every unit follows its
+  junction's "next road" pointer, so one search serves the whole force. Police
+  ignore one-way streets.
+- **States**:
+  - `RESPOND`: follow the roads toward you.
+  - `PURSUE`: within 55 m, drive at your predicted position and shadow your car.
+  - `RAM` (5★): wider pursuit range, much faster, aims to hit you, handbrakes
+    round corners.
+  - `ARREST`: you're on foot, so they pull up beside you.
+  - `REVERSE`: stuck, so back up and turn.
+  - `LEAVE`: you're clear, so siren off, drive away, despawn.
+- **Busted**: stay (nearly) still for 3 s with an officer right next to you
+  while wanted. You lose the car and the stars, and wake up at the spawn point.
+
+## Minimap
+
+Bottom left (`scripts/ui/minimap.gd`). It rotates with the camera and draws the
+real road network: main roads thicker, footways faint. It shows:
+- **you:** an arrow;
+- **drivable vehicles:** grey squares;
+- **AI traffic:** pale dots;
+- **police:** flashing red/blue dots, pinned to the rim when out of range.
+
+It zooms out as you speed up, and the rim flashes red/blue while you're wanted.
+
 ## The map: real Casablanca from OpenStreetMap
 
 The world is built from [OpenStreetMap](https://www.openstreetmap.org) data and
@@ -260,7 +315,7 @@ project.godot
 scenes/
   main.tscn                 Game root: map + player + cars + camera + HUD
   player/player.tscn        CharacterBody3D on-foot character
-  vehicles/*.tscn           Petit Taxi, Mobylette, Medina Sedan, Grand Taxi, Atlas Royale
+  vehicles/*.tscn           Petit Taxi, Mobylette, Medina Sedan, Grand Taxi, Atlas Royale, Police
   camera/camera_rig.tscn    Third-person orbit camera with SpringArm3D
   ui/hud.tscn               Hint, district, speedometer, controls, credits
 scripts/
@@ -278,6 +333,10 @@ scripts/
   traffic/pedestrian.gd        Pedestrian: pavement walking + state machine
   traffic/road_graph.gd        Road network, lanes, junction choices, light timing
   traffic/npc_visuals.gd       Baked NPC meshes (cars, people, light posts)
+  police/wanted_system.gd      Stars, crimes, line of sight, escaping
+  police/police_manager.gd     Dispatch, road flow field, chase state machine, busted
+  ui/minimap.gd                Rotating radar with roads, vehicles, police
+  ui/wanted_stars.gd           The five stars
   camera/camera_rig.gd      Orbit, collision, per-mode framing, auto-recentre
   ui/hud.gd
   world/osm/chunk_streamer.gd  Loads/unloads map chunks around the player

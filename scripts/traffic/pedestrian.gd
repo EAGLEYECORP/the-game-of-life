@@ -151,6 +151,7 @@ func _knock_down(push: Vector2) -> void:
 	_flee_dir = push
 	_set_state(State.KNOCKED)
 	_manager.scare_pedestrians(_pos, 15.0)
+	_manager.pedestrian_hit.emit(Vector3(_pos.x, 0.0, _pos.y))
 
 
 ## After running off, walk back onto the nearest pavement of the current road.

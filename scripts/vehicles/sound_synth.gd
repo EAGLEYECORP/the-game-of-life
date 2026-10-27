@@ -70,6 +70,17 @@ static func engine(style: String) -> AudioStreamWAV:
 	return _cache[key]
 
 
+## Police siren: the two-tone "pin-pon" of French and Moroccan police, half a
+## second on each note.
+static func siren() -> AudioStreamWAV:
+	if not _cache.has("siren"):
+		_cache["siren"] = _render(func(t: float) -> float:
+			var f := 650.0 if t < 0.5 else 870.0
+			var x := sin(TAU * f * t)
+			return lerpf(x, tanh(x * 4.0), 0.5) * 0.8)
+	return _cache["siren"]
+
+
 ## Renders one second of `wave(t)` (t in seconds, output -1..1) into a looping
 ## 16-bit mono WAV.
 static func _render(wave: Callable) -> AudioStreamWAV:

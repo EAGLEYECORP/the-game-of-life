@@ -9,7 +9,8 @@ extends Node3D
 ##   - waiting for the map around the spawn to stream in before enabling physics,
 ##   - placing the player and cars at the spawn points from the OSM import,
 ##   - freezing parked cars whose ground isn't loaded,
-##   - respawning on dry land after driving or falling into the sea.
+##   - respawning on dry land after driving or falling into the sea,
+##   - turning crimes into wanted stars and handling getting busted.
 
 ## Below this height the player/car is in the sea and gets respawned. The map
 ## is flat at y = 0, so anything this low has gone over the water's edge (a
@@ -21,17 +22,31 @@ const FALL_LIMIT := -0.8
 @onready var _hud: HUD = $HUD
 @onready var _streamer: ChunkStreamer = $Casablanca/ChunkStreamer
 @onready var _vehicles: Node3D = $Vehicles
+@onready var _wanted: WantedSystem = $Wanted
+@onready var _police: PoliceManager = $Police
+@onready var _traffic: TrafficManager = $Traffic
 
 var _safe_transform: Transform3D   # Last spot the player/car stood on solid ground.
 var _safe_timer := 0.0
 var _district_timer := 0.0
 var _map_ready := false
+var _spawn_transform: Transform3D   # Where you wake up after being busted.
+var _last_hit_time := -10.0         # Debounce: one crash = one crime.
 
 
 func _ready() -> void:
 	_player.vehicle_entered.connect(_on_vehicle_entered)
 	_player.vehicle_exited.connect(_on_vehicle_exited)
 	_player.interaction_hint_changed.connect(_hud.set_hint)
+
+	# Crimes -> wanted level -> HUD.
+	_player.crime_committed.connect(_wanted.report_crime)
+	_traffic.pedestrian_hit.connect(func(pos: Vector3) -> void: _wanted.report_crime("hit_pedestrian", pos))
+	_traffic.carjacked.connect(func(pos: Vector3) -> void: _wanted.report_crime("carjack", pos))
+	_wanted.stars_changed.connect(_hud.wanted_stars.set_stars)
+	_wanted.seen_changed.connect(_hud.wanted_stars.set_seen)
+	_police.busted.connect(_on_busted)
+	_hud.minimap.setup(_player, _traffic, _police, _wanted)
 
 	if _streamer.has_data:
 		_place_at_spawn_points()
@@ -40,6 +55,7 @@ func _ready() -> void:
 	_player.set_physics_process(false)
 	_player.set_process_unhandled_input(false)
 	_safe_transform = _player.global_transform
+	_spawn_transform = _player.global_transform
 
 	_camera.follow_player(_player)
 	_camera.snap_to_target()
@@ -138,11 +154,50 @@ func _respawn(body: Node3D) -> void:
 	_camera.snap_to_target()
 
 
+## The player's vehicle crashed: was it into someone else's car?
+func _on_player_vehicle_damaged(_condition: float) -> void:
+	var car := _player.current_vehicle
+	var now := Time.get_ticks_msec() * 0.001
+	if car == null or now - _last_hit_time < 1.0:
+		return
+	var victim: Node3D = null
+	for group in ["vehicles", "traffic_cars"]:
+		for other in get_tree().get_nodes_in_group(group):
+			var rel: Vector3 = other.global_position - car.global_position
+			if other == car or rel.length() > 5.5:
+				continue
+			# Only our crime if we drove into them, not if a cop rammed us.
+			if car.linear_velocity.dot(rel.normalized()) > 3.0 or car.get_speed_kmh() > 25.0 and car.linear_velocity.dot(rel) > 0.0:
+				victim = other
+	if victim == null:
+		return   # Hit a wall or a lamp post: not a crime.
+	_last_hit_time = now
+	var police_car: bool = victim is Vehicle and victim.is_police
+	_wanted.report_crime("ram_police" if police_car else "hit_car", car.global_position)
+
+
+## Busted: lose the car and the stars, wake up at the start point.
+func _on_busted() -> void:
+	if _player.current_vehicle:
+		_player.exit_vehicle()
+	_player.global_position = _spawn_transform.origin
+	_player.velocity = Vector3.ZERO
+	_wanted.clear()
+	_camera.snap_to_target()
+	_hud.flash_notice("BUSTED", 4.0)
+
+
 func _on_vehicle_entered(vehicle: Vehicle) -> void:
+	var damage := vehicle.get_node_or_null("Damage")
+	if damage and not damage.damaged.is_connected(_on_player_vehicle_damaged):
+		damage.damaged.connect(_on_player_vehicle_damaged)
 	_camera.follow_vehicle(vehicle)
 	_hud.show_vehicle(vehicle)
 
 
-func _on_vehicle_exited(_vehicle: Vehicle) -> void:
+func _on_vehicle_exited(vehicle: Vehicle) -> void:
+	var damage := vehicle.get_node_or_null("Damage")
+	if damage and damage.damaged.is_connected(_on_player_vehicle_damaged):
+		damage.damaged.disconnect(_on_player_vehicle_damaged)
 	_camera.follow_player(_player)
 	_hud.show_vehicle(null)
