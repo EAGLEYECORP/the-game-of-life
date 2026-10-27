@@ -77,6 +77,26 @@ func _build() -> void:
 				_build_city_block(center, half)
 
 
+## Parking spots along every road, on the right-hand side, skipping
+## intersections. Used by VehicleSpawner: [{pos: Vector3, yaw: float}].
+func get_parking_spots() -> Array:
+	var spots := []
+	var half := cell_size * blocks_per_side * 0.5
+	var lane := road_width * 0.3
+	for i in blocks_per_side + 1:
+		var offset := -half + cell_size * i
+		var d := -half + 15.0
+		while d < half:
+			var local := fposmod(d + half, cell_size)
+			if local > road_width and local < cell_size - road_width:
+				# Road along X heading +X: right-hand side is +Z.
+				spots.append({"pos": Vector3(d, 0.7, offset + lane), "yaw": PI * 0.5})
+				# Road along Z heading -Z: right-hand side is +X.
+				spots.append({"pos": Vector3(offset + lane, 0.7, -d), "yaw": PI})
+			d += 22.0
+	return spots
+
+
 # --- Terrain ---------------------------------------------------------------
 
 func _build_ground(half: float) -> void:

@@ -32,6 +32,8 @@ class Result:
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var collision := PackedVector3Array()
+	## Parking spots on this chunk's streets: [{pos: Vector3, yaw: float}].
+	var spots: Array[Dictionary] = []
 
 	## Adds a triangle facing `n`. Callers may pass the corners in either order:
 	## Godot treats clockwise-wound triangles (seen from the front) as front
@@ -69,6 +71,10 @@ static func build(data: Dictionary) -> Result:
 		_build_road(_decode(r["p"]), r["w"] * DM, int(r["c"]), out)
 	for b in data.get("b", []):
 		_build_building(_decode(b["p"]), b["h"] * DM, Color.html(b["c"]), out)
+	# Parking spots: flat [x_dm, z_dm, yaw_milliradians, ...].
+	var s: Array = data.get("s", [])
+	for i in range(0, s.size() - 2, 3):
+		out.spots.append({"pos": Vector3(s[i] * DM, 0.7, s[i + 1] * DM), "yaw": s[i + 2] * 0.001})
 	return out
 
 

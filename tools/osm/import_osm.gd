@@ -461,7 +461,41 @@ func _distribute() -> Array:
 						_chunk("%d_%d" % [cx, cz])["g"].append({"p": _encode(clean), "k": g["kind"]})
 
 	_add_land_rects()
+	_add_parking_spots()
 	return skyline
+
+
+## Kerb-side parking spots along car roads (not motorways), skipping the ends
+## of each way, which are usually junctions. Stored per chunk as flat
+## [x_dm, z_dm, yaw_milliradians, ...] under "s".
+func _add_parking_spots() -> void:
+	var count := 0
+	for r in _roads:
+		if r["cls"] == 0 or String(r["kind"]).begins_with("motorway") or r["kind"].ends_with("_link"):
+			continue
+		var pts: PackedVector2Array = r["pts"]
+		var travelled := 0.0
+		var next_spot := 15.0   # Leave the junction at the start of the way clear.
+		var total := 0.0
+		for i in pts.size() - 1:
+			total += pts[i].distance_to(pts[i + 1])
+		for i in pts.size() - 1:
+			var a := pts[i]
+			var b := pts[i + 1]
+			var seg := a.distance_to(b)
+			while next_spot <= travelled + seg and next_spot < total - 15.0:
+				var dir := (b - a) / seg
+				var right := Vector2(-dir.y, dir.x)   # Right-hand side of the road.
+				var p: Vector2 = a.lerp(b, (next_spot - travelled) / seg) + right * maxf(r["w"] * 0.5 - 1.2, 1.0)
+				if _is_land(p):
+					var c := _chunk(_chunk_key(p))
+					if not c.has("s"):
+						c["s"] = []
+					c["s"].append_array([roundi(p.x * DM), roundi(p.y * DM), roundi(atan2(dir.x, dir.y) * 1000.0)])
+					count += 1
+				next_spot += OsmConfig.PARKING_SPACING
+			travelled += seg
+	print("Parking spots: %d" % count)
 
 
 func _add_road_run(key: String, run: PackedVector2Array, r: Dictionary) -> void:
@@ -600,7 +634,7 @@ func _yaw_to_sea(p: Vector2) -> float:
 	return atan2(dir.x, dir.y)
 
 
-## Up to 3 parking spots on car roads 15-150 m from spawn, on the right-hand
+## Up to STARTER_VEHICLES parking spots on car roads 15-150 m from spawn, on the right-hand
 ## side of the road (Morocco drives on the right), facing along it.
 func _vehicle_spawns(spawn: Vector2) -> Array:
 	var candidates := []
@@ -632,7 +666,7 @@ func _vehicle_spawns(spawn: Vector2) -> Array:
 				break
 		if ok:
 			picked.append({"pos": [c["pos"].x, 0.7, c["pos"].y], "yaw": c["yaw"]})
-		if picked.size() == 3:
+		if picked.size() == OsmConfig.STARTER_VEHICLES:
 			break
 	return picked
 

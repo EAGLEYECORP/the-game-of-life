@@ -1,9 +1,11 @@
 class_name HUD
 extends CanvasLayer
-## On-screen overlay: interaction hint, speedometer and a controls cheat sheet.
+## On-screen overlay: interaction hint, speedometer, vehicle condition and a
+## controls cheat sheet.
 
 @onready var _hint: Label = $Hint
 @onready var _speedo: Label = $Speedometer
+@onready var _vehicle_info: Label = $VehicleInfo
 @onready var _controls: Label = $Controls
 @onready var _district: Label = $District
 @onready var _notice: Label = $Notice
@@ -12,8 +14,8 @@ extends CanvasLayer
 ## Vehicle shown on the speedometer, or null when on foot.
 var _vehicle: Vehicle = null
 
-const FOOT_CONTROLS := "WASD move  ·  Shift run  ·  Space jump  ·  E enter car\nMouse look  ·  C reset camera  ·  Esc free mouse"
-const CAR_CONTROLS := "W/S throttle & brake  ·  A/D steer  ·  Space handbrake\nE exit car  ·  Mouse look  ·  C reset camera"
+const FOOT_CONTROLS := "WASD move  ·  Shift run  ·  Space jump  ·  F enter / steal vehicle\nMouse look  ·  C reset camera  ·  Esc free mouse"
+const CAR_CONTROLS := "W/S throttle & brake  ·  A/D steer  ·  Space handbrake  ·  H horn  ·  L lights\nF get out  ·  Mouse look  ·  C reset camera"
 
 
 func _ready() -> void:
@@ -27,6 +29,9 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if _vehicle:
 		_speedo.text = "%d km/h" % roundi(_vehicle.get_speed_kmh())
+		var damage := _vehicle.get_node_or_null("Damage") as VehicleDamage
+		var condition := "" if damage == null else "  ·  condition %d%%" % roundi(damage.condition)
+		_vehicle_info.text = _vehicle.display_name + condition
 
 
 func set_hint(text: String) -> void:
@@ -38,6 +43,7 @@ func set_hint(text: String) -> void:
 func show_vehicle(vehicle: Vehicle) -> void:
 	_vehicle = vehicle
 	_speedo.visible = vehicle != null
+	_vehicle_info.visible = vehicle != null
 	_controls.text = CAR_CONTROLS if vehicle else FOOT_CONTROLS
 
 

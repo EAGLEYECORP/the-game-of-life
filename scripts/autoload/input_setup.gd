@@ -14,8 +14,10 @@ const KEY_BINDINGS := {
 	"move_right": [KEY_D, KEY_RIGHT],
 	"jump": [KEY_SPACE],          # On foot: jump.
 	"sprint": [KEY_SHIFT],        # On foot: run.
-	"interact": [KEY_E, KEY_F],   # Enter / exit vehicles.
+	"interact": [KEY_F, KEY_E],   # Enter / exit (and steal) vehicles.
 	"handbrake": [KEY_SPACE],     # In vehicle: handbrake.
+	"horn": [KEY_H],              # In vehicle: horn.
+	"toggle_lights": [KEY_L],     # In vehicle: headlights on/off.
 	"camera_reset": [KEY_C],      # Snap camera behind the target.
 	"toggle_mouse": [KEY_ESCAPE], # Release / capture the mouse cursor.
 }
@@ -26,6 +28,8 @@ const JOY_BUTTON_BINDINGS := {
 	"handbrake": [JOY_BUTTON_A],
 	"sprint": [JOY_BUTTON_LEFT_STICK],
 	"interact": [JOY_BUTTON_Y],
+	"horn": [JOY_BUTTON_LEFT_SHOULDER],
+	"toggle_lights": [JOY_BUTTON_DPAD_UP],
 	"camera_reset": [JOY_BUTTON_RIGHT_STICK],
 	"toggle_mouse": [JOY_BUTTON_START],
 }

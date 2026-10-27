@@ -95,7 +95,7 @@ func _process(delta: float) -> void:
 ## Parked cars outside the streamed area would fall through the missing
 ## ground, so they're frozen until their chunk loads.
 func _freeze_cars_without_ground() -> void:
-	for car: Vehicle in _vehicles.get_children():
+	for car: Vehicle in get_tree().get_nodes_in_group("vehicles"):
 		if car.has_driver():
 			continue
 		var should_freeze := not _map_ready or not _streamer.is_loaded_at(car.global_position)

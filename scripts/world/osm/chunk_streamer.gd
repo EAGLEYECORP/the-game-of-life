@@ -18,6 +18,11 @@ extends Node3D
 ## Emitted once the chunks around the first focus position are in place.
 ## Until then nothing should rely on the ground existing.
 signal initial_area_ready
+## A chunk finished loading. `spots` are its parking spots ({pos, yaw}) for
+## VehicleSpawner. With the placeholder city, sent once with key "fallback".
+signal chunk_loaded(key: String, spots: Array)
+## A chunk was freed; anything standing on it has no ground any more.
+signal chunk_unloaded(key: String)
 
 @export_dir var data_dir := "res://maps/casablanca_osm"
 @export var load_radius := 500.0    ## Metres around the focus to keep loaded.
@@ -43,6 +48,7 @@ var _mutex := Mutex.new()
 var _material: StandardMaterial3D
 var _initial_done := false
 var _update_timer := 0.0
+var _fallback: Node = null
 
 
 func _ready() -> void:
@@ -64,7 +70,8 @@ func _ready() -> void:
 	if not has_data:
 		push_warning("No OSM data in %s - using the placeholder city. See README to import Casablanca." % data_dir)
 		if fallback_scene:
-			add_child(fallback_scene.instantiate())
+			_fallback = fallback_scene.instantiate()
+			add_child(_fallback)
 		if sea:
 			sea.visible = false
 	else:
@@ -118,6 +125,11 @@ func is_loaded_at(pos: Vector3) -> bool:
 	return _loaded.has(key) or not _available.has(key)
 
 
+## Chunk key for a world position (same keys as chunk_loaded/unloaded).
+func key_at(pos: Vector3) -> String:
+	return _key_at(pos) if has_data else "fallback"
+
+
 ## Name of the district containing `pos`, or "" outside every area.
 func get_area_name(pos: Vector3) -> String:
 	for area in manifest.get("areas", []):
@@ -165,6 +177,7 @@ func _update_wanted() -> void:
 		if _chunk_distance(int(c[0]), int(c[1]), pos) > unload_radius:
 			_loaded[key].queue_free()
 			_loaded.erase(key)
+			chunk_unloaded.emit(key)
 
 
 func _start_task(key: String, path: String) -> void:
@@ -201,6 +214,7 @@ func _finalize_finished() -> void:
 		add_child(node)
 		if key != "__skyline":
 			_loaded[key] = node
+			chunk_loaded.emit(key, result.spots)
 
 
 func _make_chunk_node(key: String, result: ChunkBuilder.Result) -> Node3D:
@@ -230,4 +244,6 @@ func _make_chunk_node(key: String, result: ChunkBuilder.Result) -> Node3D:
 func _emit_ready() -> void:
 	if not _initial_done:
 		_initial_done = true
+		if _fallback and _fallback.has_method("get_parking_spots"):
+			chunk_loaded.emit("fallback", _fallback.get_parking_spots())
 		initial_area_ready.emit()

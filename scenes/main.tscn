@@ -1,11 +1,16 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://maps/casablanca.tscn" id="2_map"]
 [ext_resource type="PackedScene" path="res://scenes/player/player.tscn" id="3_player"]
-[ext_resource type="PackedScene" path="res://scenes/vehicles/vehicle.tscn" id="4_vehicle"]
 [ext_resource type="PackedScene" path="res://scenes/camera/camera_rig.tscn" id="5_camera"]
 [ext_resource type="PackedScene" path="res://scenes/ui/hud.tscn" id="6_hud"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/petit_taxi.tscn" id="7_taxi"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/mobylette.tscn" id="8_moby"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/medina_sedan.tscn" id="9_sedan"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/atlas_royale.tscn" id="10_royale"]
+[ext_resource type="PackedScene" path="res://scenes/vehicles/grand_taxi.tscn" id="11_grand"]
+[ext_resource type="Script" path="res://scripts/vehicles/vehicle_spawner.gd" id="12_spawner"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -17,18 +22,27 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0.1, 2)
 
 [node name="Vehicles" type="Node3D" parent="."]
 
-[node name="Dacia" parent="Vehicles" instance=ExtResource("4_vehicle")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3, 0.6, 10)
+[node name="PetitTaxi" parent="Vehicles" instance=ExtResource("7_taxi")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 4.2, 0.7, 14)
 
-[node name="PetitTaxi" parent="Vehicles" instance=ExtResource("4_vehicle")]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3, 0.6, -14)
-display_name = "Petit Taxi"
-paint_color = Color(0.8, 0.08, 0.08, 1)
+[node name="Mobylette" parent="Vehicles" instance=ExtResource("8_moby")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 4.2, 0.7, -10)
 
-[node name="GrandTaxi" parent="Vehicles" instance=ExtResource("4_vehicle")]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 16, 0.6, 3)
-display_name = "Grand Taxi"
-paint_color = Color(0.93, 0.93, 0.9, 1)
+[node name="MedinaSedan" parent="Vehicles" instance=ExtResource("9_sedan")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0.7, 20)
+
+[node name="AtlasRoyale" parent="Vehicles" instance=ExtResource("10_royale")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -4.2, 0.7, -20)
+
+[node name="GrandTaxi" parent="Vehicles" instance=ExtResource("11_grand")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 16, 0.7, 4.2)
+
+[node name="ParkedVehicles" type="Node3D" parent="." node_paths=PackedStringArray("streamer", "player")]
+script = ExtResource("12_spawner")
+vehicle_scenes = Array[PackedScene]([ExtResource("7_taxi"), ExtResource("8_moby"), ExtResource("9_sedan"), ExtResource("11_grand"), ExtResource("10_royale")])
+weights = PackedFloat32Array(3, 2.5, 3, 1, 0.6)
+streamer = NodePath("../Casablanca/ChunkStreamer")
+player = NodePath("../Player")
 
 [node name="CameraRig" parent="." instance=ExtResource("5_camera")]
 

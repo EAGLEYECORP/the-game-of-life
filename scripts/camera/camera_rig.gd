@@ -8,9 +8,11 @@ extends Node3D
 ##      └─ SpringArm3D (pulls the camera in when a wall is in the way)
 ##         └─ Camera3D
 ##
-## Each kind of target has its own framing (distance, height, FOV). While
-## driving, the camera swings back behind the car on its own after you stop
-## moving the mouse.
+## Each kind of target has its own framing (distance, height, FOV); vehicles
+## supply their own (a scooter sits closer than a limousine). Switching target
+## blends position, distance and angle over `transition_time` instead of
+## cutting. While driving, the camera swings back behind the vehicle on its own
+## after you stop moving the mouse.
 
 ## Framing used for a target. Tweak these in the inspector.
 @export_group("On foot")
@@ -19,9 +21,11 @@ extends Node3D
 @export var foot_fov := 70.0
 
 @export_group("In vehicle")
+## Fallbacks; each Vehicle normally sets camera_distance/height/fov itself.
 @export var car_distance := 7.5
 @export var car_height := 1.6
 @export var car_fov := 72.0
+@export var transition_time := 0.9      ## Seconds to blend on enter/exit.
 @export var car_fov_speed_boost := 14.0 ## Extra FOV at top speed (sense of speed).
 @export var auto_center_delay := 1.5    ## Seconds after last look input.
 @export var auto_center_speed := 2.5
@@ -41,6 +45,7 @@ var _yaw := 0.0
 var _pitch := deg_to_rad(-15.0)
 var _time_since_look := 0.0
 var _in_vehicle := false
+var _transition := 0.0   # 1 right after switching target, eases down to 0.
 
 @onready var _pivot: Node3D = $Pivot
 @onready var _spring_arm: SpringArm3D = $Pivot/SpringArm3D
@@ -78,8 +83,15 @@ func _process(delta: float) -> void:
 		_rotate_view(-stick.x * stick_sensitivity * delta, -stick.y * stick_sensitivity * delta)
 
 	_time_since_look += delta
+	_transition = maxf(_transition - delta / transition_time, 0.0)
 	if _in_vehicle:
-		_auto_center_behind_vehicle(delta)
+		if _transition > 0.0:
+			# Getting in: swing round behind the vehicle, easing out.
+			var t := clampf(5.0 * delta * (0.5 + _transition), 0.0, 1.0)
+			_yaw = lerp_angle(_yaw, _behind_yaw(), t)
+			_pitch = lerpf(_pitch, deg_to_rad(-12.0), t)
+		else:
+			_auto_center_behind_vehicle(delta)
 
 	_follow_target(delta)
 	_update_framing(delta)
@@ -98,18 +110,19 @@ func snap_to_target() -> void:
 	if target == null:
 		return
 	_snap_behind_target()
-	var height := car_height if _in_vehicle else foot_height
-	global_position = target.global_position + Vector3.UP * height
+	_transition = 0.0
+	global_position = target.global_position + Vector3.UP * _target_height()
 
 
 func follow_vehicle(vehicle: Vehicle) -> void:
 	_set_target(vehicle, true)
-	_snap_behind_target()
 
 
 # --- Internals --------------------------------------------------------------
 
 func _set_target(new_target: Node3D, in_vehicle: bool) -> void:
+	if target != null and target != new_target:
+		_transition = 1.0
 	target = new_target
 	_in_vehicle = in_vehicle
 	# Don't let the spring arm collide with the thing it's looking at.
@@ -152,11 +165,19 @@ func _auto_center_behind_vehicle(delta: float) -> void:
 	_pitch = lerpf(_pitch, deg_to_rad(-12.0), clampf(auto_center_speed * delta, 0.0, 1.0))
 
 
+func _target_height() -> float:
+	var vehicle := target as Vehicle
+	if vehicle:
+		return vehicle.camera_height
+	return car_height if _in_vehicle else foot_height
+
+
 func _follow_target(delta: float) -> void:
-	var height := car_height if _in_vehicle else foot_height
-	var goal := target.global_position + Vector3.UP * height
+	var goal := target.global_position + Vector3.UP * _target_height()
+	# Slower follow during a transition so the camera glides to its new target.
+	var speed := follow_speed * lerpf(1.0, 0.3, _transition)
 	# Exponential smoothing that behaves the same at any frame rate.
-	global_position = global_position.lerp(goal, 1.0 - exp(-follow_speed * delta))
+	global_position = global_position.lerp(goal, 1.0 - exp(-speed * delta))
 
 
 ## Smoothly blends spring length and FOV between on-foot and vehicle framing.
@@ -168,7 +189,8 @@ func _update_framing(delta: float) -> void:
 		fov = car_fov
 		var vehicle := target as Vehicle
 		if vehicle:
-			fov += car_fov_speed_boost * clampf(vehicle.get_speed_kmh() / vehicle.max_speed_kmh, 0.0, 1.0)
-	var t := 1.0 - exp(-zoom_speed * delta)
+			distance = vehicle.camera_distance
+			fov = vehicle.camera_fov + car_fov_speed_boost * clampf(vehicle.get_speed_kmh() / vehicle.max_speed_kmh, 0.0, 1.0)
+	var t := 1.0 - exp(-zoom_speed * lerpf(1.0, 0.5, _transition) * delta)
 	_spring_arm.spring_length = lerpf(_spring_arm.spring_length, distance, t)
 	_camera.fov = lerpf(_camera.fov, fov, t)

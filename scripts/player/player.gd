@@ -23,12 +23,16 @@ signal interaction_hint_changed(text: String)
 
 @export_group("Interaction")
 @export var vehicle_reach := 3.5     ## Max distance (m) to a vehicle's door to enter it.
+@export var break_in_time := 1.2     ## Seconds to break into a locked car.
 
 ## Vehicle we are currently driving, or null when on foot.
 var current_vehicle: Vehicle = null
 
 var _gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var _nearby_vehicle: Vehicle = null
+# Locked car being broken into, and time left. Movement is blocked meanwhile.
+var _breaking_into: Vehicle = null
+var _break_in_left := 0.0
 
 @onready var _model: Node3D = $Model
 @onready var _collision: CollisionShape3D = $CollisionShape3D
@@ -36,19 +40,26 @@ var _nearby_vehicle: Vehicle = null
 
 func _physics_process(delta: float) -> void:
 	_apply_gravity(delta)
-	_handle_jump()
-	_handle_movement(delta)
+	if _breaking_into:
+		_update_break_in(delta)
+	else:
+		_handle_jump()
+		_handle_movement(delta)
 	move_and_slide()
-	_update_nearby_vehicle()
+	if not _breaking_into:
+		_update_nearby_vehicle()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Using _unhandled_input (not polling in _physics_process) lets us mark the
-	# key press as handled, so the vehicle doesn't also see the same E press and
+	# key press as handled, so the vehicle doesn't also see the same F press and
 	# kick us straight back out.
-	if event.is_action_pressed("interact") and _nearby_vehicle != null:
+	if event.is_action_pressed("interact") and _nearby_vehicle != null and not _breaking_into:
 		get_viewport().set_input_as_handled()
-		enter_vehicle(_nearby_vehicle)
+		if _nearby_vehicle.locked:
+			_start_break_in(_nearby_vehicle)
+		else:
+			enter_vehicle(_nearby_vehicle)
 
 
 # --- Movement ---------------------------------------------------------------
@@ -125,10 +136,43 @@ func _update_nearby_vehicle() -> void:
 
 	if best != _nearby_vehicle:
 		_nearby_vehicle = best
-		if best:
-			interaction_hint_changed.emit("Press E to drive the %s" % best.display_name)
-		else:
+		if best == null:
 			interaction_hint_changed.emit("")
+		elif best.locked:
+			interaction_hint_changed.emit("Press F to steal the %s (locked)" % best.display_name)
+		else:
+			interaction_hint_changed.emit("Press F to drive the %s" % best.display_name)
+
+
+## Locked car: stand at the door for a moment, then the alarm goes off and
+## we're in. GTA rules.
+func _start_break_in(vehicle: Vehicle) -> void:
+	_breaking_into = vehicle
+	_break_in_left = break_in_time
+	velocity.x = 0.0
+	velocity.z = 0.0
+	# Face the car while working on the lock.
+	var to_car := vehicle.global_position - global_position
+	face(atan2(to_car.x, to_car.z))
+	interaction_hint_changed.emit("Breaking into the %s..." % vehicle.display_name)
+
+
+func _update_break_in(delta: float) -> void:
+	velocity.x = 0.0
+	velocity.z = 0.0
+	_break_in_left -= delta
+	var vehicle := _breaking_into
+	# Someone else took it, or it got pushed away: give up.
+	if vehicle.has_driver() or global_position.distance_to(vehicle.get_door_position()) > vehicle_reach * 1.5:
+		_breaking_into = null
+		_nearby_vehicle = null
+		interaction_hint_changed.emit("")
+		return
+	if _break_in_left <= 0.0:
+		_breaking_into = null
+		vehicle.locked = false
+		vehicle.start_alarm()
+		enter_vehicle(vehicle)
 
 
 ## Puts the player in the driver's seat. The player node stays in the scene but

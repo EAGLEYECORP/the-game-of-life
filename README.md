@@ -15,13 +15,60 @@ An open-world driving sandbox set in Casablanca, built with **Godot 4.3+** and G
 |---|---|---|
 | Move / drive | WASD or arrows | W throttle, S brake/reverse, A/D steer |
 | Run | Shift | — |
-| Jump / handbrake | Space | Space |
-| Enter / exit vehicle | E (or F) near a driver's door | E |
+| Jump / handbrake | Space | Space (drift) |
+| Enter / exit / steal | **F** (or E) near a driver's door | **F** |
+| Horn | — | H |
+| Headlights | — | L |
 | Look | Mouse / right stick | Mouse / right stick |
 | Reset camera | C | C |
 | Free / recapture mouse | Esc / click | Esc / click |
 
-Gamepads work too (left stick, triggers, A, Y).
+Gamepads work too: left stick, triggers, A (jump/handbrake), Y (enter/exit),
+LB (horn), D-pad up (lights).
+
+## Vehicles
+
+| Vehicle | Type | Feel | Top speed |
+|---|---|---|---|
+| **Petit Taxi** | Red city hatch with a lit white "PETIT TAXI" roof sign and its licence number on the doors | Nimble, quick off the line; the horn you'll hear all over Casablanca | 150 km/h |
+| **Mobylette** | The 2-stroke moped of Moroccan streets, with a visible rider | Buzzy, light, leans into corners, squeezes through gaps | 60 km/h |
+| **Medina Sedan** | Everyday family saloon in everyday colours | Balanced, front-wheel drive | 165 km/h |
+| **Grand Taxi** | Old cream intercity saloon with roof rack and luggage | Heavy, soft and wallowy; rear-wheel drive, old diesel rattle and bleat | 135 km/h |
+| **Atlas Royale** | Luxury limousine with chrome trim | Fast, planted, rear-wheel drive with a V8 burble | 230 km/h |
+
+Each type is a scene in `scenes/vehicles/` running the same scripts with its
+own tuning. Select its root node to tweak engine, steering, grip, camera and
+paint in the inspector.
+
+**Handling** (`scripts/vehicles/vehicle.gd`) is Godot's `VehicleBody3D` with
+arcade helpers on top:
+- **Engine:** a punchy pull off the line that tapers toward top speed.
+- **Grip assist:** removes most sideways sliding. The handbrake relaxes it and
+  loosens the rear wheels for drifts.
+- **Stability:** downforce at speed and an upright torque against rollovers.
+  If you do end up on the roof, the vehicle flips back after 2 s.
+- **Scooters** ride on four narrow hidden wheels for stability and lean visually
+  into turns.
+
+**Components**: each vehicle scene has three child nodes:
+- `Lights` (`vehicle_lights.gd`): headlights with real spotlights, tail lights
+  that brighten when braking, the taxi roof sign, and alarm flashing.
+- `Sounds` (`vehicle_sounds.gd`): engine and horn, synthesised in code by
+  `sound_synth.gd` (no audio files). The engine pitch climbs through fake gears.
+- `Damage` (`vehicle_damage.gd`): visual only. Crashes are detected from sudden
+  velocity changes. The bodywork nearest the hit gets dented and the paint
+  dirtier. Hard hits crack windows and break headlights, and the engine smokes
+  below 50% condition (black smoke below 20%). The HUD shows the condition.
+
+**Stealing**: `VehicleSpawner` (`ParkedVehicles` in `main.tscn`) parks
+random vehicles on the streets as map chunks stream in and removes them when
+the chunk streams out. Taxis and mobylettes are the most common. About 40% are
+locked: press F and the player spends a moment breaking in, then the alarm
+goes off (horn and lamps pulse) and you drive away. The last vehicle you drove
+is never removed. One of each type also waits next to the spawn point.
+
+The camera glides to each vehicle's own framing when you get in. The scooter
+sits close and low, the limousine further back. The FOV widens with speed.
 
 ## The map: real Casablanca from OpenStreetMap
 
@@ -102,8 +149,10 @@ will use it.
 - **Chunks**: features are sorted into 200 m tiles. Buildings 60 m or taller
   go into `skyline.json`, which is always loaded so landmarks stay visible.
 - **Spawn**: the configured point is snapped to the nearest road and turned to
-  face the nearest sea. Three parking spots are picked on nearby streets, on the
+  face the nearest sea. Five starter spots are picked on nearby streets, on the
   right-hand side of the road.
+- **Parking spots**: one every 45 m along car roads, kerb side, stored per
+  chunk for `VehicleSpawner`.
 
 Everything you'd want to tweak (areas, spawn, heights, road widths, chunk size)
 is in `tools/osm/osm_config.gd`. Change it and re-run step 2 (and step 1 if you
@@ -141,14 +190,19 @@ project.godot
 scenes/
   main.tscn                 Game root: map + player + cars + camera + HUD
   player/player.tscn        CharacterBody3D on-foot character
-  vehicles/vehicle.tscn     VehicleBody3D car (4 raycast wheels)
+  vehicles/*.tscn           Petit Taxi, Mobylette, Medina Sedan, Grand Taxi, Atlas Royale
   camera/camera_rig.tscn    Third-person orbit camera with SpringArm3D
   ui/hud.tscn               Hint, district, speedometer, controls, credits
 scripts/
   autoload/input_setup.gd   Registers all input actions at startup
   main.gd                   Wiring + spawn, respawn-from-sea, car freezing
   player/player.gd          Walk / run / jump, enter & exit vehicles
-  vehicles/vehicle.gd       Driving, braking, speed-sensitive steering, exit spot
+  vehicles/vehicle.gd       Arcade driving, enter/exit, locks, alarm
+  vehicles/vehicle_lights.gd   Headlights, brake lights, taxi sign
+  vehicles/vehicle_sounds.gd   Engine + horn players
+  vehicles/sound_synth.gd      Generates horn/engine sounds in code
+  vehicles/vehicle_damage.gd   Visual damage: dents, smoke, cracked glass
+  vehicles/vehicle_spawner.gd  Parks stealable vehicles around the streamed map
   camera/camera_rig.gd      Orbit, collision, per-mode framing, auto-recentre
   ui/hud.gd
   world/osm/chunk_streamer.gd  Loads/unloads map chunks around the player
@@ -182,9 +236,13 @@ assets/                     models/, textures/, audio/, fonts/ (empty for now)
 
 ## Adding things
 
-- **New car**: instance `scenes/vehicles/vehicle.tscn` and set `display_name`,
-  `paint_color`, and the engine/steering exports in the inspector. The first
-  three cars under `Vehicles` are moved to the importer's parking spots.
+- **New vehicle type**: duplicate the closest scene in `scenes/vehicles/`,
+  change its meshes and tuning, then add it to `vehicle_scenes` and `weights`
+  on the `ParkedVehicles` node. Naming conventions under `Body`: `Paint*` meshes
+  get the paint colour, `Headlight*`/`Taillight*`/`TaxiSign*` meshes glow,
+  `HeadlightBeam*` spotlights light the road, `Glass*` meshes can crack, and
+  `Rider` is shown while driven. The vehicles under `Vehicles` in `main.tscn`
+  are moved to the importer's starter spots near the spawn.
 - **Different spawn or districts**: edit `tools/osm/osm_config.gd`, then re-import.
 - **Rebinding keys**: define an action in *Project Settings → Input Map* and it
   replaces the defaults from `input_setup.gd`.

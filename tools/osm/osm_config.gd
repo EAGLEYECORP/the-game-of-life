@@ -91,6 +91,12 @@ const LANDMARK_FALLBACKS := [
 		"size": 25.0, "height": 210.0, "color": Color(0.93, 0.90, 0.84)},
 ]
 
+## Parked-car spots: one every PARKING_SPACING metres along car roads, on the
+## kerb side. VehicleSpawner fills some of them as chunks stream in.
+const PARKING_SPACING := 45.0
+## How many vehicles to line up near the player spawn (one of each type).
+const STARTER_VEHICLES := 5
+
 ## Streaming grid. Each chunk is CHUNK_SIZE x CHUNK_SIZE metres.
 const CHUNK_SIZE := 200.0
 ## Land/sea mask resolution in metres (coastline -> walkable ground).
