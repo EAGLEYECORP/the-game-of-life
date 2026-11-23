@@ -45,17 +45,18 @@ var _loaded := {}          # Chunk key -> Node3D
 var _pending := {}         # Chunk key -> WorkerThreadPool task id
 var _finished: Array = []  # [key, ChunkBuilder.Result], filled by worker threads
 var _mutex := Mutex.new()
-var _material: StandardMaterial3D
+var _material: ShaderMaterial
 var _initial_done := false
 var _update_timer := 0.0
 var _fallback: Node = null
+var _coast := PackedVector2Array()   # Simplified coastline; INF entries split pieces.
 
 
 func _ready() -> void:
-	_material = StandardMaterial3D.new()
-	_material.vertex_color_use_as_albedo = true
-	_material.vertex_color_is_srgb = true
-	_material.roughness = 0.9
+	# One material for every chunk: vertex colours + procedural facades
+	# (windows, Art Deco detail, lit windows at night).
+	_material = ShaderMaterial.new()
+	_material.shader = load("res://assets/shaders/facade.gdshader")
 
 	var manifest_path := data_dir.path_join("manifest.json")
 	if FileAccess.file_exists(manifest_path):
@@ -138,6 +139,27 @@ func get_area_value(pos: Vector3, key: String, default: float) -> float:
 		if pos.x >= r[0] and pos.x <= r[2] and pos.z >= r[1] and pos.z <= r[3]:
 			return area.get(key, default)
 	return default
+
+
+## Metres from `pos` to the nearest coastline (for ocean sound and sea haze).
+## Uses the simplified coast in manifest.json, or the placeholder city's.
+func get_coast_distance(pos: Vector3) -> float:
+	if not has_data:
+		return _fallback.get_coast_distance(pos) if _fallback and _fallback.has_method("get_coast_distance") else INF
+	if _coast.is_empty():
+		for piece: Array in manifest.get("coast", []):
+			for i in range(0, piece.size() - 1, 2):
+				_coast.append(Vector2(piece[i], piece[i + 1]))
+			_coast.append(Vector2.INF)
+		if _coast.is_empty():
+			_coast.append(Vector2.INF)
+	var p := Vector2(pos.x, pos.z)
+	var best := INF
+	for i in _coast.size() - 1:
+		if _coast[i] == Vector2.INF or _coast[i + 1] == Vector2.INF:
+			continue   # Breaks between separate coastline pieces.
+		best = minf(best, p.distance_to(Geometry2D.get_closest_point_to_segment(p, _coast[i], _coast[i + 1])))
+	return best
 
 
 ## The placeholder city node when running without OSM data, else null.
@@ -253,6 +275,8 @@ func _make_chunk_node(key: String, result: ChunkBuilder.Result) -> Node3D:
 		var cs := CollisionShape3D.new()
 		cs.shape = shape
 		body.add_child(cs)
+	for sign in result.signs:
+		CitySigns.shop_sign(body, sign["pos"], sign["normal"], sign["width"], sign["seed"])
 	return body
 
 

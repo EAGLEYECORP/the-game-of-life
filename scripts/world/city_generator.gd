@@ -39,6 +39,24 @@ const SEA := Color(0.1, 0.35, 0.5)
 const LANE_PAINT := Color(0.95, 0.9, 0.7)
 const MOSQUE_GREEN := Color(0.1, 0.45, 0.35)
 
+## Real Casablanca street names for the placeholder grid, French and Arabic
+## (Moroccan plates use شارع for boulevards/avenues and زنقة for streets).
+## The first one runs along the sea.
+const STREETS_X := [
+	["Boulevard de la Corniche", "شارع الكورنيش"], ["Boulevard Moulay Youssef", "شارع مولاي يوسف"],
+	["Boulevard d'Anfa", "شارع أنفا"], ["Rue Allal Ben Abdellah", "زنقة علال بن عبد الله"],
+	["Boulevard Mohammed V", "شارع محمد الخامس"], ["Rue Tahar Sebti", "زنقة الطاهر السبتي"],
+	["Boulevard Zerktouni", "شارع الزرقطوني"], ["Boulevard Abdelmoumen", "شارع عبد المومن"],
+	["Boulevard Bir Anzarane", "شارع بئر أنزران"],
+]
+const STREETS_Z := [
+	["Avenue des FAR", "شارع القوات المسلحة الملكية"], ["Boulevard Rachidi", "شارع الرشيدي"],
+	["Rue Prince Moulay Abdallah", "زنقة الأمير مولاي عبد الله"], ["Avenue Hassan II", "شارع الحسن الثاني"],
+	["Boulevard Ghandi", "شارع غاندي"], ["Rue Ibn Batouta", "زنقة ابن بطوطة"],
+	["Boulevard Massira Khadra", "شارع المسيرة الخضراء"], ["Rue de Fès", "زنقة فاس"],
+	["Boulevard Roudani", "شارع الروداني"],
+]
+
 var _rng := RandomNumberGenerator.new()
 var _materials := {}   # Color -> StandardMaterial3D, so equal colors share one.
 var _root: Node3D      # Container for everything generated, rebuilt on regenerate.
@@ -99,6 +117,12 @@ func get_parking_spots() -> Array:
 	return spots
 
 
+## Distance to the sea, which lies north of the corniche (for ambience/haze).
+func get_coast_distance(pos: Vector3) -> float:
+	var coast_z := -cell_size * blocks_per_side * 0.5 - 15.0
+	return absf(pos.z - coast_z)
+
+
 ## The street grid as a road graph for AI traffic and pedestrians, in the
 ## same layout as the OSM importer's traffic.json (metres). Every second
 ## junction gets traffic lights; every fourth road is a main boulevard.
@@ -110,21 +134,22 @@ func get_road_graph() -> Dictionary:
 		for i in n:
 			nodes.append_array([-half + cell_size * i, -half + cell_size * j])
 	var edges := []
+	var names := STREETS_X + STREETS_Z
 	for j in n:
 		for i in n:
 			var id := j * n + i
 			var p := Vector2(nodes[id * 2], nodes[id * 2 + 1])
 			if i < n - 1:   # Road along X (line j).
 				edges.append([id, id + 1, 2 if j % 4 == 0 else 1, 1, 0, road_width,
-					[p.x, p.y, p.x + cell_size, p.y]])
+					[p.x, p.y, p.x + cell_size, p.y], j % STREETS_X.size()])
 			if j < n - 1:   # Road along Z (line i).
 				edges.append([id, id + n, 2 if i % 4 == 0 else 1, 1, 0, road_width,
-					[p.x, p.y, p.x, p.y + cell_size]])
+					[p.x, p.y, p.x, p.y + cell_size], STREETS_X.size() + i % STREETS_Z.size()])
 	var signals := []
 	for j in range(0, n, 2):
 		for i in range(0, n, 2):
 			signals.append(j * n + i)
-	return {"nodes": nodes, "edges": edges, "signals": signals}
+	return {"nodes": nodes, "edges": edges, "signals": signals, "names": names}
 
 
 # --- Terrain ---------------------------------------------------------------
@@ -225,12 +250,27 @@ func _build_city_block(center: Vector3, half: float) -> void:
 			var w := plot * _rng.randf_range(0.75, 0.95)
 			var d := plot * _rng.randf_range(0.75, 0.95)
 			var h := _rng.randf_range(6.0, 18.0) + downtown * downtown * _rng.randf_range(0.0, 55.0)
-			_add_building(pos, Vector3(w, h, d))
+			# Art Deco downtown, whitewashed low houses at the edges.
+			var style := 2 if downtown > 0.55 and h < 40.0 else (0 if h < 9.0 and _rng.randf() < 0.5 else 1)
+			_add_building(pos, Vector3(w, h, d), style)
+			# Some ground floors get a shop sign facing the street.
+			var outward := Vector3.ZERO
+			if gx == 0 or gx == splits - 1:
+				outward = Vector3(-1 if gx == 0 else 1, 0, 0)
+			elif gz == 0 or gz == splits - 1:
+				outward = Vector3(0, 0, -1 if gz == 0 else 1)
+			if outward != Vector3.ZERO and _rng.randf() < 0.35:
+				var half_depth := (w if outward.x != 0.0 else d) * 0.5
+				CitySigns.shop_sign(_root, pos + outward * half_depth + Vector3.UP * 3.7, outward,
+					minf((d if outward.x != 0.0 else w) * 0.6, 5.0), _rng.randi())
 
 
-func _add_building(pos: Vector3, size: Vector3) -> void:
+func _add_building(pos: Vector3, size: Vector3, style: int) -> void:
 	var color: Color = FACADE_COLORS[_rng.randi() % FACADE_COLORS.size()]
-	_add_box(pos + Vector3(0, size.y * 0.5, 0), size, color, true)
+	var mi := _add_box(pos + Vector3(0, size.y * 0.5, 0), size, color, true)
+	# Procedural facade (windows, Art Deco detail, lit windows at night).
+	mi.material_override = _facade_material(color, style)
+	mi.set_instance_shader_parameter("building_top", size.y)
 	# Darker parapet on the roof for a bit of silhouette.
 	_add_box(pos + Vector3(0, size.y + 0.4, 0), Vector3(size.x + 0.4, 0.8, size.z + 0.4),
 			color.darkened(0.15), false)
@@ -328,6 +368,19 @@ func _add_collider(pos: Vector3, size: Vector3) -> StaticBody3D:
 	body.add_child(shape)
 	_root.add_child(body)
 	return body
+
+
+## Facade shader material per colour and style, shared between buildings.
+func _facade_material(color: Color, style: int) -> ShaderMaterial:
+	var key := "facade|%s|%d" % [color.to_html(), style]
+	if not _materials.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = load("res://assets/shaders/facade.gdshader")
+		m.set_shader_parameter("use_world_coords", true)
+		m.set_shader_parameter("base_color", color)
+		m.set_shader_parameter("world_style", float(style))
+		_materials[key] = m
+	return _materials[key]
 
 
 func _material(color: Color) -> StandardMaterial3D:

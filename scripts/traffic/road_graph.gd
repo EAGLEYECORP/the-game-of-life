@@ -33,6 +33,9 @@ var edge_oneway := PackedInt32Array()     ## 1 = only a -> b.
 var edge_width := PackedFloat32Array()
 var edge_length := PackedFloat32Array()
 var edge_points: Array[PackedVector2Array] = []
+var edge_name := PackedInt32Array()       ## Index into `names`, -1 = unnamed.
+## [[french, arabic], ...] street names for sign plates.
+var names: Array = []
 ## node id -> {edge id: light group 0/1}
 var signals := {}
 
@@ -68,6 +71,7 @@ static func from_dict(d: Dictionary, scale: float) -> RoadGraph:
 		g.edge_oneway.append(int(e[4]))
 		g.edge_width.append(float(e[5]) * scale)
 		g.edge_points.append(pts)
+		g.edge_name.append(int(e[7]) if e.size() > 7 else -1)
 		var length := 0.0
 		for i in pts.size() - 1:
 			length += pts[i].distance_to(pts[i + 1])
@@ -76,6 +80,7 @@ static func from_dict(d: Dictionary, scale: float) -> RoadGraph:
 		g.node_edges[int(e[1])].append(id)
 		g._index_edge(id)
 
+	g.names = d.get("names", [])
 	for n in d.get("signals", []):
 		g._add_signal(int(n))
 	return g

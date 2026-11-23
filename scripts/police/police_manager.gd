@@ -169,6 +169,7 @@ func _spawn_unit(graph: RoadGraph, ppos: Vector2, first: bool) -> void:
 		v.ai_controlled = true
 		v.siren_on = true
 		v.spawned = true
+		v.lights_on = DayNightCycle.current != null and DayNightCycle.current.is_night()
 		v.add_to_group("police")
 		add_child(v)
 		v.global_transform = Transform3D(Basis(Vector3.UP, atan2(dir.x, dir.y)), Vector3(p.x, 0.75, p.y))

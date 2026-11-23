@@ -21,6 +21,8 @@ An open-world driving sandbox set in Casablanca, built with **Godot 4.3+** and G
 | Headlights | — | L |
 | Look | Mouse / right stick | Mouse / right stick |
 | Reset camera | C | C |
+| Radio station | — | R / Q |
+| Fast-forward time | hold T | hold T |
 | Free / recapture mouse | Esc / click | Esc / click |
 
 Gamepads work too: left stick, triggers, A (jump/handbrake), Y (enter/exit),
@@ -192,6 +194,73 @@ real road network: main roads thicker, footways faint. It shows:
 
 It zooms out as you speed up, and the rim flashes red/blue while you're wanted.
 
+## Atmosphere: light, sound and signs
+
+**Day and night** (`scripts/world/day_night.gd`):
+- A full day lasts 24 real minutes and starts at 18:00. Hold **T** to
+  fast-forward; the clock is top right.
+- The sun rises over the land and sets into the Atlantic.
+- Colours follow hourly keyframes tuned for the coast: a misty marine layer at
+  dawn, bright hazy midday, a long golden hour and blue moonlit nights.
+- **Fog and haze:** height fog keeps the haze low. Sun scattering and aerial
+  perspective soften distant buildings, and the fog thickens near the sea.
+- **At night:** windows light up, street lamps glow (the 12 nearest cast real
+  light), and headlights switch on automatically when you get in a car.
+- **Cost:** the sky's reflections refresh incrementally only 4 times a second,
+  and moon shadows are off.
+
+**Buildings** use one procedural facade shader
+(`assets/shaders/facade.gdshader`, no textures). Each district gets its own
+style:
+- **Old Medina:** whitewash, few small windows, painted shutters.
+- **Modern blocks:** a regular window grid with shopfronts at street level.
+- **Downtown Art Deco:** pilasters between window bays, floor bands, a stepped
+  cornice, in cream and white.
+
+**Signs** (`scripts/world/city_signs.gd`, `street_furniture.gd`):
+- **Street plates:** bilingual blue enamel plates at junctions, with the French
+  name above the Arabic. Names come from OSM's `name` / `name:ar`. The
+  placeholder city uses real Casablanca street names.
+- **Shop signs** on facades, in Arabic or Darija plus French: حانوت Hanout,
+  حجام Hajjam (barber), تيليبوتيك Téléboutique, سناك Snack, صيدلية Pharmacie,
+  قهوة و أتاي Qahwa w Atay...
+- **Billboards** with Darija slogans: سير بشوية *Sir b-chwiya* (drive
+  slowly), كازا كتبقى كازا *Casa katbqa Casa*, مرحبا بيكم فكازا *Mrehba bikom
+  f Casa*...
+
+Text uses the bundled Noto Sans and Noto Sans Arabic fonts (SIL Open Font
+License, `assets/fonts/OFL-Noto.txt`), so Arabic is shaped correctly on every
+platform.
+
+**Radio** (`scripts/audio/radio_system.gd`): press **R** / **Q** while driving
+to change station.
+- **Stations:**
+  - **Casa Chaabi 101.3**: chaabi in the Hijaz mode, with darbuka and claps.
+  - **Gnawa Bladi 96.8**: guembri ostinatos and qraqeb.
+  - **Andalous FM 89.5**: oud, qanun and ney.
+  - **Raï Corniche 94.7**: drum machine, pad and synth lead.
+- **Placeholder music:** the tracks are synthesised in code (`music_synth.gd`)
+  in the background. They're marked "(placeholder)" on screen.
+- **Live stations:** stations keep playing while you're elsewhere, so you tune
+  in mid-song. A chime plays between songs.
+- **Per-vehicle default:** a Petit Taxi comes tuned to chaabi.
+- **Real music:** drop `.ogg` / `.wav` / `.mp3` files into
+  `assets/audio/radio/<chaabi|gnawa|andalous|rai>/` and that station plays them
+  instead.
+
+**Ambient sound** (`scripts/audio/ambient_audio.gd`):
+- the Atlantic surf, louder near the coastline;
+- traffic rumble, following the number of cars around you;
+- city murmur with passing mopeds, busier where there are more people and
+  quieter at night;
+- seagulls near the sea by day.
+
+All of it is synthesised once at startup on a worker thread, and muffled
+inside a car (not on a moped).
+
+**Traffic mix**: Petit Taxis and mobylettes now make up most of the traffic and
+parked vehicles.
+
 ## The map: real Casablanca from OpenStreetMap
 
 The world is built from [OpenStreetMap](https://www.openstreetmap.org) data and
@@ -336,6 +405,13 @@ scripts/
   police/wanted_system.gd      Stars, crimes, line of sight, escaping
   police/police_manager.gd     Dispatch, road flow field, chase state machine, busted
   ui/minimap.gd                Rotating radar with roads, vehicles, police
+  world/day_night.gd           Time of day, sun, sky, coastal fog
+  world/street_furniture.gd    Street lamps, name plates, billboards near the player
+  world/city_signs.gd          Bilingual plates, Darija shop signs, billboards
+  audio/radio_system.gd        Four stations, real files or placeholder music
+  audio/music_synth.gd         Placeholder chaabi / gnawa / Andalusi / raï
+  audio/ambient_synth.gd       Ocean, traffic, city, seagull sounds
+  audio/ambient_audio.gd       Mixes ambience by location
   ui/wanted_stars.gd           The five stars
   camera/camera_rig.gd      Orbit, collision, per-mode framing, auto-recentre
   ui/hud.gd
@@ -351,7 +427,10 @@ maps/
   placeholder_city.tscn     Fallback city used when no OSM data is imported
   casablanca_osm/           Generated by import_osm.gd (manifest, skyline, traffic, chunks)
 data/osm/raw/               Raw Overpass downloads (git-ignored)
-assets/                     models/, textures/, audio/, fonts/ (empty for now)
+assets/
+  shaders/facade.gdshader   Procedural facades (windows, Art Deco, night lights)
+  fonts/                    Noto Sans + Noto Sans Arabic (OFL)
+  audio/radio/<station>/    Optional real radio tracks
 ```
 
 ## How the pieces talk

@@ -37,3 +37,10 @@ common/physics_ticks_per_second=60
 [rendering]
 
 anti_aliasing/quality/msaa_3d=1
+
+[shader_globals]
+
+night_factor={
+"type": "float",
+"value": 0.0
+}

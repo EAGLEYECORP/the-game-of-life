@@ -32,20 +32,32 @@ class Result:
 	var normals := PackedVector3Array()
 	var colors := PackedColorArray()
 	var collision := PackedVector3Array()
+	## Facade coordinates for the facade shader: walls (metres along, metres
+	## up); everything else (0, -1). UV2 = (style, building height).
+	var uvs := PackedVector2Array()
+	var uv2s := PackedVector2Array()
+	## Shop sign spots on facades: [{pos: Vector3, normal: Vector3, width: float, seed: int}].
+	var signs: Array[Dictionary] = []
 	## Parking spots on this chunk's streets: [{pos: Vector3, yaw: float}].
 	var spots: Array[Dictionary] = []
 
 	## Adds a triangle facing `n`. Callers may pass the corners in either order:
 	## Godot treats clockwise-wound triangles (seen from the front) as front
 	## faces, so the order is fixed up here to match the normal.
-	func tri(a: Vector3, b: Vector3, c: Vector3, n: Vector3, col: Color, solid: bool) -> void:
+	func tri(a: Vector3, b: Vector3, c: Vector3, n: Vector3, col: Color, solid: bool,
+			ua := Vector2(0, -1), ub := Vector2(0, -1), uc := Vector2(0, -1), uv2 := Vector2(-1, 0)) -> void:
 		if (b - a).cross(c - a).dot(n) > 0.0:
 			var t := b
 			b = c
 			c = t
+			var tu := ub
+			ub = uc
+			uc = tu
 		verts.append_array([a, b, c])
 		normals.append_array([n, n, n])
 		colors.append_array([col, col, col])
+		uvs.append_array([ua, ub, uc])
+		uv2s.append_array([uv2, uv2, uv2])
 		if solid:
 			collision.append_array([a, b, c])
 
@@ -59,6 +71,8 @@ class Result:
 		arrays[Mesh.ARRAY_VERTEX] = verts
 		arrays[Mesh.ARRAY_NORMAL] = normals
 		arrays[Mesh.ARRAY_COLOR] = colors
+		arrays[Mesh.ARRAY_TEX_UV] = uvs
+		arrays[Mesh.ARRAY_TEX_UV2] = uv2s
 		return arrays
 
 
@@ -70,7 +84,7 @@ static func build(data: Dictionary) -> Result:
 	for r in data.get("r", []):
 		_build_road(_decode(r["p"]), r["w"] * DM, int(r["c"]), out)
 	for b in data.get("b", []):
-		_build_building(_decode(b["p"]), b["h"] * DM, Color.html(b["c"]), out)
+		_build_building(_decode(b["p"]), b["h"] * DM, Color.html(b["c"]), int(b.get("s", 1)), out)
 	# Parking spots: flat [x_dm, z_dm, yaw_milliradians, ...].
 	var s: Array = data.get("s", [])
 	for i in range(0, s.size() - 2, 3):
@@ -153,16 +167,41 @@ static func _build_road(pts: PackedVector2Array, width: float, cls: int, out: Re
 
 ## Extrudes a footprint into walls + flat roof. Rings are counter-clockwise
 ## (positive area in x/z), so the outward normal of edge a->b is (dz, -dx).
-static func _build_building(ring: PackedVector2Array, h: float, col: Color, out: Result) -> void:
+## `style` picks the facade look (0 Medina, 1 modern, 2 Art Deco), see
+## assets/shaders/facade.gdshader. Walls carry (distance along the outline,
+## height) as UVs so windows line up across corners.
+static func _build_building(ring: PackedVector2Array, h: float, col: Color, style: int, out: Result) -> void:
 	var n := ring.size()
-	var wall_col := col
+	var uv2 := Vector2(style, h)
+	var along := 0.0
+	var longest := -1
+	var longest_len := 0.0
 	for i in n:
 		var a := ring[i]
 		var b := ring[(i + 1) % n]
 		var d := b - a
-		if d.length_squared() < 0.0001:
+		var len := d.length()
+		if len < 0.01:
 			continue
 		var nrm := Vector3(d.y, 0.0, -d.x).normalized()
-		out.quad(Vector3(a.x, 0.0, a.y), Vector3(a.x, h, a.y), Vector3(b.x, h, b.y),
-			Vector3(b.x, 0.0, b.y), nrm, wall_col, true)
+		var a0 := Vector3(a.x, 0.0, a.y)
+		var a1 := Vector3(a.x, h, a.y)
+		var b1 := Vector3(b.x, h, b.y)
+		var b0 := Vector3(b.x, 0.0, b.y)
+		out.tri(a0, a1, b1, nrm, col, true, Vector2(along, 0), Vector2(along, h), Vector2(along + len, h), uv2)
+		out.tri(a0, b1, b0, nrm, col, true, Vector2(along, 0), Vector2(along + len, h), Vector2(along + len, 0), uv2)
+		along += len
+		if len > longest_len:
+			longest_len = len
+			longest = i
 	_build_flat_polygon(ring, h, col.darkened(0.12), true, out)
+
+	# About one building in four gets a shop sign above its longest wall.
+	var seed := absi(hash(ring[0]))
+	if longest >= 0 and longest_len >= 5.0 and h >= 5.0 and seed % 4 == 0:
+		var a := ring[longest]
+		var b := ring[(longest + 1) % n]
+		var d := (b - a).normalized()
+		var mid := (a + b) * 0.5
+		out.signs.append({"pos": Vector3(mid.x, 3.7, mid.y), "normal": Vector3(d.y, 0.0, -d.x),
+			"width": minf(longest_len * 0.6, 5.0), "seed": seed})

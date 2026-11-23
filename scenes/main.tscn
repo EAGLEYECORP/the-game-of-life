@@ -1,4 +1,4 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://maps/casablanca.tscn" id="2_map"]
@@ -15,6 +15,9 @@
 [ext_resource type="Script" path="res://scripts/police/wanted_system.gd" id="14_wanted"]
 [ext_resource type="Script" path="res://scripts/police/police_manager.gd" id="15_police"]
 [ext_resource type="PackedScene" path="res://scenes/vehicles/police_car.tscn" id="16_police_car"]
+[ext_resource type="Script" path="res://scripts/world/street_furniture.gd" id="17_furniture"]
+[ext_resource type="Script" path="res://scripts/audio/radio_system.gd" id="18_radio"]
+[ext_resource type="Script" path="res://scripts/audio/ambient_audio.gd" id="19_ambient"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -44,7 +47,7 @@ transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 18, 0.7, 7.6)
 [node name="ParkedVehicles" type="Node3D" parent="." node_paths=PackedStringArray("streamer", "player")]
 script = ExtResource("12_spawner")
 vehicle_scenes = Array[PackedScene]([ExtResource("7_taxi"), ExtResource("8_moby"), ExtResource("9_sedan"), ExtResource("11_grand"), ExtResource("10_royale")])
-weights = PackedFloat32Array(3, 2.5, 3, 1, 0.6)
+weights = PackedFloat32Array(3.5, 3.5, 2.5, 1, 0.5)
 streamer = NodePath("../Casablanca/ChunkStreamer")
 player = NodePath("../Player")
 
@@ -53,7 +56,7 @@ script = ExtResource("13_traffic")
 streamer = NodePath("../Casablanca/ChunkStreamer")
 player = NodePath("../Player")
 car_scenes = Array[PackedScene]([ExtResource("7_taxi"), ExtResource("8_moby"), ExtResource("9_sedan"), ExtResource("11_grand"), ExtResource("10_royale")])
-car_weights = PackedFloat32Array(3, 2.5, 3, 1.2, 0.5)
+car_weights = PackedFloat32Array(4.5, 4, 2, 1, 0.4)
 
 [node name="Wanted" type="Node" parent="."]
 script = ExtResource("14_wanted")
@@ -64,6 +67,21 @@ player = NodePath("../Player")
 traffic = NodePath("../Traffic")
 wanted = NodePath("../Wanted")
 police_scene = ExtResource("16_police_car")
+
+[node name="StreetFurniture" type="Node3D" parent="." node_paths=PackedStringArray("traffic", "player")]
+script = ExtResource("17_furniture")
+traffic = NodePath("../Traffic")
+player = NodePath("../Player")
+
+[node name="Radio" type="Node" parent="." node_paths=PackedStringArray("player")]
+script = ExtResource("18_radio")
+player = NodePath("../Player")
+
+[node name="Ambient" type="Node" parent="." node_paths=PackedStringArray("player", "streamer", "traffic")]
+script = ExtResource("19_ambient")
+player = NodePath("../Player")
+streamer = NodePath("../Casablanca/ChunkStreamer")
+traffic = NodePath("../Traffic")
 
 [node name="CameraRig" parent="." instance=ExtResource("5_camera")]
 

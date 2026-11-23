@@ -22,12 +22,15 @@ const SPAWN_LON := -7.6330
 ## box enclosing all of them, so you can drive between areas.
 ## `heights` = [min, max] metres used when OSM has no height for a building.
 ## `palette` = facade colours picked per building in that area.
+## `style` = facade style (0 Medina whitewash, 1 modern, 2 Art Deco); see
+## assets/shaders/facade.gdshader. Downtown keeps some modern blocks too.
 ## `traffic` / `pedestrians` = density multipliers for AI cars and walkers
 ## (1.0 = normal): busy Corniche and downtown, narrow car-free Medina lanes
 ## full of people.
 const AREAS := [
 	{
 		"name": "Hassan II Mosque",
+		"style": 1,
 		"traffic": 1.0, "pedestrians": 1.2,
 		"bbox": [33.600, -7.645, 33.614, -7.620],
 		"heights": [8.0, 18.0],
@@ -35,6 +38,7 @@ const AREAS := [
 	},
 	{
 		"name": "Corniche - Ain Diab",
+		"style": 1,
 		"traffic": 1.6, "pedestrians": 1.4,
 		"bbox": [33.585, -7.705, 33.610, -7.645],
 		"heights": [6.0, 15.0],
@@ -42,6 +46,7 @@ const AREAS := [
 	},
 	{
 		"name": "Twin Center - Maarif",
+		"style": 1,
 		"traffic": 1.3, "pedestrians": 1.1,
 		"bbox": [33.578, -7.645, 33.594, -7.622],
 		"heights": [12.0, 30.0],
@@ -49,6 +54,7 @@ const AREAS := [
 	},
 	{
 		"name": "Old Medina",
+		"style": 0,
 		"traffic": 0.35, "pedestrians": 1.6,
 		"bbox": [33.598, -7.626, 33.608, -7.610],
 		"heights": [5.0, 10.0],
@@ -56,6 +62,7 @@ const AREAS := [
 	},
 	{
 		"name": "Downtown (Art Deco)",
+		"style": 2,
 		"traffic": 1.6, "pedestrians": 1.3,
 		"bbox": [33.586, -7.626, 33.600, -7.605],
 		"heights": [14.0, 24.0],

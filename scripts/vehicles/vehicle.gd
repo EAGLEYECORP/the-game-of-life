@@ -272,6 +272,8 @@ func has_driver() -> bool:
 
 func set_driver(new_driver: Player) -> void:
 	driver = new_driver
+	if driver and DayNightCycle.current and DayNightCycle.current.is_night():
+		lights_on = true
 	if _rider:
 		_rider.visible = shows_rider and driver != null
 	if driver:

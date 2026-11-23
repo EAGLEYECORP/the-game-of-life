@@ -47,6 +47,11 @@ func _ready() -> void:
 	_wanted.seen_changed.connect(_hud.wanted_stars.set_seen)
 	_police.busted.connect(_on_busted)
 	_hud.minimap.setup(_player, _traffic, _police, _wanted)
+	$Radio.station_changed.connect(_hud.show_radio)
+	# Coastal haze follows the player.
+	var day_night := $Casablanca/DayNight as DayNightCycle
+	day_night.focus = _player
+	day_night.streamer = _streamer
 
 	if _streamer.has_data:
 		_place_at_spawn_points()

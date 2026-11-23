@@ -18,6 +18,9 @@ const KEY_BINDINGS := {
 	"handbrake": [KEY_SPACE],     # In vehicle: handbrake.
 	"horn": [KEY_H],              # In vehicle: horn.
 	"toggle_lights": [KEY_L],     # In vehicle: headlights on/off.
+	"radio_next": [KEY_R],        # In vehicle: next radio station.
+	"radio_prev": [KEY_Q],        # In vehicle: previous radio station.
+	"time_skip": [KEY_T],         # Hold to fast-forward the clock.
 	"camera_reset": [KEY_C],      # Snap camera behind the target.
 	"toggle_mouse": [KEY_ESCAPE], # Release / capture the mouse cursor.
 }
@@ -30,6 +33,8 @@ const JOY_BUTTON_BINDINGS := {
 	"interact": [JOY_BUTTON_Y],
 	"horn": [JOY_BUTTON_LEFT_SHOULDER],
 	"toggle_lights": [JOY_BUTTON_DPAD_UP],
+	"radio_next": [JOY_BUTTON_DPAD_RIGHT],
+	"radio_prev": [JOY_BUTTON_DPAD_LEFT],
 	"camera_reset": [JOY_BUTTON_RIGHT_STICK],
 	"toggle_mouse": [JOY_BUTTON_START],
 }

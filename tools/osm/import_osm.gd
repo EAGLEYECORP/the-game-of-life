@@ -217,6 +217,7 @@ func _add_building(pts: PackedVector2Array, tags: Dictionary, id: int) -> void:
 	_buildings.append({
 		"ring": ring, "h": h, "name": tags.get("name", ""),
 		"color": _pick_color(id, area_idx),
+		"style": _pick_style(id, area_idx, h),
 	})
 
 
@@ -268,7 +269,8 @@ func _parse_road(pts: PackedVector2Array, tags: Dictionary) -> void:
 	elif ow in ["yes", "1", "true"] or tags.get("junction", "") in ["roundabout", "circular"] \
 			or (kind.begins_with("motorway") and ow != "no"):
 		oneway = 1
-	_roads.append({"pts": pts, "w": w, "kind": kind, "cls": cls, "oneway": oneway})
+	_roads.append({"pts": pts, "w": w, "kind": kind, "cls": cls, "oneway": oneway,
+		"name": String(tags.get("name:fr", tags.get("name", ""))), "name_ar": String(tags.get("name:ar", ""))})
 
 
 func _building_height(tags: Dictionary, id: int, area_idx: int) -> float:
@@ -307,6 +309,16 @@ func _pick_color(id: int, area_idx: int) -> Color:
 	var c: Color = palette[int(_hash01(id * 7 + 3) * palette.size()) % palette.size()]
 	# Small per-building shade variation so blocks don't look like one slab.
 	return c.darkened(_hash01(id * 13 + 1) * 0.08)
+
+
+## Facade style from the district, with some variety; towers are modern.
+func _pick_style(id: int, area_idx: int, h: float) -> int:
+	var style: int = OsmConfig.AREAS[area_idx].get("style", 1) if area_idx >= 0 else 1
+	if h > 40.0:
+		return 1
+	if style == 2 and _hash01(id * 5 + 2) < 0.25:
+		return 1    # Downtown isn't all Art Deco.
+	return style
 
 
 func _hash01(n: int) -> float:
@@ -442,7 +454,8 @@ func _chunk(key: String) -> Dictionary:
 func _distribute() -> Array:
 	var skyline := []
 	for b in _buildings:
-		var entry := {"p": _encode(b["ring"]), "h": roundi(b["h"] * DM), "c": b["color"].to_html(false)}
+		var entry := {"p": _encode(b["ring"]), "h": roundi(b["h"] * DM), "c": b["color"].to_html(false),
+			"s": b.get("style", 1)}
 		if b["h"] >= OsmConfig.SKYLINE_MIN_HEIGHT:
 			skyline.append(entry)
 		else:
@@ -596,7 +609,8 @@ func _encode(pts: PackedVector2Array) -> Array:
 ## node, i.e. the exact same coordinates, so points are matched by position
 ## (rounded to 0.5 m). Written to traffic.json in decimetres:
 ##   nodes:   [x, z, ...]
-##   edges:   [[a, b, class, kind, oneway, width, [x, z, ...]], ...]
+##   edges:   [[a, b, class, kind, oneway, width, [x, z, ...], name id], ...]
+##   names:   [[french name, arabic name], ...] (street name plates)
 ##            kind 0 = walk only, 1 = street, 2 = fast road (no pedestrians)
 ##   signals: [node ids with traffic lights]
 func _build_road_graph() -> Dictionary:
@@ -611,7 +625,9 @@ func _build_road_graph() -> Dictionary:
 	_gnode_ids.clear()
 	_gnode_pos.clear()
 	var edges := []
-	var edge_major := []     # Per edge: counts toward "major junction".
+	var edge_major := []
+	var names := []          # [[french, arabic], ...]
+	var name_ids := {}     # Per edge: counts toward "major junction".
 	for r in _roads:
 		var pts: PackedVector2Array = r["pts"]
 		var kind: String = r["kind"]
@@ -628,7 +644,14 @@ func _build_road_graph() -> Dictionary:
 				continue
 			var b := _graph_node(pts[i])
 			if cur.size() >= 2 and _polyline_length(cur) > 0.5:
-				edges.append([a, b, r["cls"], kind_code, r["oneway"], roundi(r["w"] * DM), _encode(cur)])
+				var name_id := -1
+				if r["name"] != "":
+					var key: String = r["name"] + "|" + r["name_ar"]
+					if not name_ids.has(key):
+						name_ids[key] = names.size()
+						names.append([r["name"], r["name_ar"]])
+					name_id = name_ids[key]
+				edges.append([a, b, r["cls"], kind_code, r["oneway"], roundi(r["w"] * DM), _encode(cur), name_id])
 				edge_major.append(r["cls"] == 2 or kind.begins_with("tertiary"))
 			cur = PackedVector2Array([pts[i]])
 			a = b
@@ -681,7 +704,7 @@ func _build_road_graph() -> Dictionary:
 
 	print("Road graph: %d junctions, %d roads, %d traffic lights (%s)." % [node_pos.size(), edges.size(),
 		signals.size(), "from OSM" if not _signal_points.is_empty() else "major crossroads"])
-	return {"nodes": _encode(node_pos), "edges": edges, "signals": signals}
+	return {"nodes": _encode(node_pos), "edges": edges, "signals": signals, "names": names}
 
 
 func _point_key(p: Vector2) -> Vector2i:
@@ -731,7 +754,32 @@ func _make_manifest() -> Dictionary:
 		"vehicle_spawns": _vehicle_spawns(spawn),
 		"areas": areas,
 		"attribution": "Map data © OpenStreetMap contributors (ODbL)",
+		"coast": _simplified_coast(),
 	}
+
+
+## Coastline pieces near the map, thinned to a point every ~25 m, in metres:
+## [[x, z, x, z, ...], ...]. Used for ocean ambience and sea haze.
+func _simplified_coast() -> Array:
+	var area := _bounds.grow(1000.0)
+	var pieces := []
+	for line in _coast:
+		var piece := []
+		var last := Vector2.INF
+		for i in line.size():
+			var p := line[i]
+			if not area.has_point(p):
+				if piece.size() >= 4:
+					pieces.append(piece)
+				piece = []
+				last = Vector2.INF
+				continue
+			if last == Vector2.INF or p.distance_to(last) >= 25.0 or i == line.size() - 1:
+				piece.append_array([snappedf(p.x, 0.1), snappedf(p.y, 0.1)])
+				last = p
+		if piece.size() >= 4:
+			pieces.append(piece)
+	return pieces
 
 
 ## Moves a point onto the nearest road/footway on land within 200 m.

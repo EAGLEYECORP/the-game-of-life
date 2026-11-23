@@ -1,7 +1,8 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/osm/chunk_streamer.gd" id="1_streamer"]
 [ext_resource type="PackedScene" path="res://maps/placeholder_city.tscn" id="2_fallback"]
+[ext_resource type="Script" path="res://scripts/world/day_night.gd" id="3_daynight"]
 
 [sub_resource type="ProceduralSkyMaterial" id="Sky_mat"]
 sky_top_color = Color(0.32, 0.55, 0.85, 1)
@@ -19,10 +20,18 @@ sky = SubResource("Sky_res")
 ambient_light_source = 3
 tonemap_mode = 2
 ssao_enabled = true
+glow_enabled = true
+glow_intensity = 0.6
+glow_bloom = 0.05
+glow_hdr_threshold = 1.2
 fog_enabled = true
 fog_light_color = Color(0.78, 0.8, 0.82, 1)
 fog_density = 0.002
-fog_sky_affect = 0.3
+fog_sun_scatter = 0.35
+fog_aerial_perspective = 0.35
+fog_sky_affect = 0.25
+fog_height = 25.0
+fog_height_density = 0.03
 
 [sub_resource type="StandardMaterial3D" id="Mat_sea"]
 albedo_color = Color(0.08, 0.3, 0.45, 1)
@@ -44,6 +53,11 @@ light_color = Color(1, 0.96, 0.88, 1)
 light_energy = 1.2
 shadow_enabled = true
 directional_shadow_max_distance = 250.0
+
+[node name="DayNight" type="Node" parent="." node_paths=PackedStringArray("sun", "world_environment")]
+script = ExtResource("3_daynight")
+sun = NodePath("../Sun")
+world_environment = NodePath("../WorldEnvironment")
 
 [node name="Sea" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.6, 0)

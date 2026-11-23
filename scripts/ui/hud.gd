@@ -12,6 +12,10 @@ extends CanvasLayer
 @onready var _attribution: Label = $Attribution
 @onready var minimap: Minimap = $Minimap
 @onready var wanted_stars: WantedStars = $WantedStars
+@onready var _clock: Label = $Clock
+@onready var _radio: Label = $Radio
+
+var _radio_timer := 0.0
 
 var _notice_timer := 0.0
 
@@ -19,7 +23,7 @@ var _notice_timer := 0.0
 var _vehicle: Vehicle = null
 
 const FOOT_CONTROLS := "WASD move  ·  Shift run  ·  Space jump  ·  F enter / steal vehicle\nMouse look  ·  C reset camera  ·  Esc free mouse"
-const CAR_CONTROLS := "W/S throttle & brake  ·  A/D steer  ·  Space handbrake  ·  H horn  ·  L lights\nF get out  ·  Mouse look  ·  C reset camera"
+const CAR_CONTROLS := "W/S throttle & brake  ·  A/D steer  ·  Space handbrake  ·  H horn  ·  L lights\nR / Q radio  ·  F get out  ·  Mouse look  ·  C reset camera  ·  hold T: fast time"
 
 
 func _ready() -> void:
@@ -31,6 +35,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	if DayNightCycle.current:
+		_clock.text = DayNightCycle.current.clock_text()
+	if _radio_timer > 0.0:
+		_radio_timer -= delta
+		_radio.modulate.a = clampf(_radio_timer, 0.0, 1.0)
 	if _notice_timer > 0.0:
 		_notice_timer -= delta
 		if _notice_timer <= 0.0:
@@ -75,3 +84,9 @@ func set_attribution(text: String) -> void:
 func flash_notice(text: String, seconds: float) -> void:
 	set_notice(text)
 	_notice_timer = seconds
+
+
+## Radio station / song name, shown for a few seconds.
+func show_radio(text: String) -> void:
+	_radio.text = text
+	_radio_timer = 4.0
