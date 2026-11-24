@@ -21,6 +21,7 @@ const KEY_BINDINGS := {
 	"radio_next": [KEY_R],        # In vehicle: next radio station.
 	"radio_prev": [KEY_Q],        # In vehicle: previous radio station.
 	"time_skip": [KEY_T],         # Hold to fast-forward the clock.
+	"job_toggle": [KEY_J],        # In a Petit Taxi: start/stop taxi fares.
 	"camera_reset": [KEY_C],      # Snap camera behind the target.
 	"toggle_mouse": [KEY_ESCAPE], # Release / capture the mouse cursor.
 }

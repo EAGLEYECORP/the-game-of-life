@@ -25,6 +25,8 @@ const FALL_LIMIT := -0.8
 @onready var _wanted: WantedSystem = $Wanted
 @onready var _police: PoliceManager = $Police
 @onready var _traffic: TrafficManager = $Traffic
+@onready var _wallet: Wallet = $Wallet
+@onready var _missions: MissionManager = $Missions
 
 var _safe_transform: Transform3D   # Last spot the player/car stood on solid ground.
 var _safe_timer := 0.0
@@ -47,6 +49,8 @@ func _ready() -> void:
 	_wanted.seen_changed.connect(_hud.wanted_stars.set_seen)
 	_police.busted.connect(_on_busted)
 	_hud.minimap.setup(_player, _traffic, _police, _wanted)
+	_hud.minimap.missions = _missions
+	_wallet.money_changed.connect(_hud.set_money)
 	$Radio.station_changed.connect(_hud.show_radio)
 	# Coastal haze follows the player.
 	var day_night := $Casablanca/DayNight as DayNightCycle
@@ -181,15 +185,17 @@ func _on_player_vehicle_damaged(_condition: float) -> void:
 	_wanted.report_crime("ram_police" if police_car else "hit_car", car.global_position)
 
 
-## Busted: lose the car and the stars, wake up at the start point.
+## Busted: lose the car, the stars and a fine (100 DH per star), wake up at
+## the start point.
 func _on_busted() -> void:
+	var fine := _wallet.fine(100 * maxi(_wanted.stars, 1), "Fine")
 	if _player.current_vehicle:
 		_player.exit_vehicle()
 	_player.global_position = _spawn_transform.origin
 	_player.velocity = Vector3.ZERO
 	_wanted.clear()
 	_camera.snap_to_target()
-	_hud.flash_notice("BUSTED", 4.0)
+	_hud.show_banner("BUSTED", "Fine: " + Wallet.format(fine))
 
 
 func _on_vehicle_entered(vehicle: Vehicle) -> void:

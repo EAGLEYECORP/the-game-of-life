@@ -22,6 +22,7 @@ An open-world driving sandbox set in Casablanca, built with **Godot 4.3+** and G
 | Look | Mouse / right stick | Mouse / right stick |
 | Reset camera | C | C |
 | Radio station | — | R / Q |
+| Taxi fares (in a Petit Taxi) | — | J |
 | Fast-forward time | hold T | hold T |
 | Free / recapture mouse | Esc / click | Esc / click |
 
@@ -193,6 +194,50 @@ real road network: main roads thicker, footways faint. It shows:
 - **police:** flashing red/blue dots, pinned to the rim when out of range.
 
 It zooms out as you speed up, and the rim flashes red/blue while you're wanted.
+
+## Missions and money
+
+**Money** (`scripts/economy/wallet.gd`) is in dirhams. You start with
+500 DH; the total is top right, with a popup for every gain or loss.
+
+| Earn | Spend |
+|---|---|
+| Story missions (300–1500 DH) | Repair at Youssef's garage: 150 DH |
+| Taxi fares (distance-based plus a speed tip, less for every crash) | Respray (loses your wanted level if police can't see you): 250 DH |
+| | Busted: a 100 DH fine per star |
+
+**Story missions** (`scripts/missions/mission_data.gd`): walk into a yellow
+marker (letters on the minimap) to start a contact's next mission.
+
+| Mission | Contact | What you do | Reward |
+|---|---|---|---|
+| Mrehba f Casa | Youssef (Y), at his garage | Bring his old Petit Taxi back to the garage | 300 DH |
+| Taxi Rouge | Youssef | Pick up a regular and get her downtown before the timer runs out | 400 DH |
+| Colis fragile | L'Hajj Abdelkader (H), Old Medina | Collect Fès pottery on his mobylette and deliver it to Maarif; fail if the moped drops below 60% condition | 600 DH |
+| Tomobil dyal L'Hajj | L'Hajj | Break into "his" Atlas Royale, lose the 2-star heat, deliver it to the garage | 1500 DH |
+| Course de la Corniche | Rachid (R), by the sea | Beat the clock through checkpoints along the roads | 1000 DH |
+
+- **During a mission:** the objective is shown at the bottom of the screen,
+  with a marker, a minimap blip and a GPS route along the roads. Contacts
+  speak in Darija (transliterated) with translations.
+- **Failing:** you fail if you're busted, run out of time, wreck the cargo or
+  abandon the mission vehicle for 15 s. Walk back into the marker to retry.
+- **Places:** missions describe places instead of hard-coding them ("a road
+  150–280 m from the garage", "the Old Medina district", "the road nearest
+  the sea"), so they work on the real OSM map and on the placeholder city.
+  Add your own missions to `MISSIONS` with the same step types (`talk`,
+  `spawn_vehicle`, `enter_vehicle`, `goto`, `pickup`, `dropoff`, `wait`,
+  `add_wanted`, `lose_wanted`, `race`).
+
+**Taxi side job**: in any Petit Taxi, press **J**. Passengers wave at red
+markers; stop next to them and they get in, then drive them to their stop.
+Fares chain until you press J again or leave the taxi.
+
+**Youssef's garage** (green G): drive in to repair, or respray to lose the
+police once they've lost sight of you.
+
+**Saving**: money, completed missions and stats are saved to
+`user://gta_casa_save.json` automatically. Delete that file to start over.
 
 ## Atmosphere: light, sound and signs
 
@@ -408,6 +453,12 @@ scripts/
   world/day_night.gd           Time of day, sun, sky, coastal fog
   world/street_furniture.gd    Street lamps, name plates, billboards near the player
   world/city_signs.gd          Bilingual plates, Darija shop signs, billboards
+  economy/wallet.gd            Money in dirhams, earn/spend/fine
+  economy/save_game.gd         JSON save file
+  missions/mission_manager.gd  Runs missions, taxi fares, garage, GPS route
+  missions/mission_data.gd     The story missions as data
+  missions/mission_marker.gd   Glowing markers / checkpoints
+  missions/mission_npc.gd      Passengers and contacts
   audio/radio_system.gd        Four stations, real files or placeholder music
   audio/music_synth.gd         Placeholder chaabi / gnawa / Andalusi / raï
   audio/ambient_synth.gd       Ocean, traffic, city, seagull sounds

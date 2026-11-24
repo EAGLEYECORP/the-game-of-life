@@ -27,6 +27,7 @@ var player: Player
 var traffic: TrafficManager
 var police: PoliceManager
 var wanted: WantedSystem
+var missions: MissionManager
 
 var _layer: Control
 var _timer := 0.0
@@ -99,6 +100,15 @@ func _draw_layer() -> void:
 				width = maxf(g.edge_width[e] * scale, 2.0)
 			draw_polyline_on(line, col, width)
 
+	# GPS route to the mission objective.
+	if missions:
+		var r := missions.route()
+		if r.size() >= 2:
+			var line := PackedVector2Array()
+			for p in r:
+				line.append(to_map.call(p))
+			draw_polyline_on(line, Color(1.0, 0.75, 0.15, 0.9), 3.5)
+
 	# Vehicles you could take, then traffic.
 	var own := player.current_vehicle
 	for v in get_tree().get_nodes_in_group("vehicles"):
@@ -122,6 +132,20 @@ func _draw_layer() -> void:
 				m = center + off.normalized() * (radius_px - 6.0)
 			_layer.draw_circle(m, 4.5, Color(1, 0.15, 0.1) if blink else Color(0.2, 0.4, 1))
 			_layer.draw_arc(m, 4.5, 0, TAU, 12, Color.WHITE, 1.0)
+
+	# Mission blips: contacts (letters), garage, objective. Pinned to the rim.
+	if missions:
+		for b in missions.blips():
+			var m: Vector2 = to_map.call(Vector2(b["pos"].x, b["pos"].z))
+			var off := m - center
+			if off.length() > radius_px - 8.0:
+				m = center + off.normalized() * (radius_px - 8.0)
+			var col: Color = MissionMarker.COLORS.get(b["kind"], Color.YELLOW)
+			_layer.draw_circle(m, 7.0, Color(0, 0, 0, 0.7))
+			_layer.draw_circle(m, 5.5, col)
+			if b["letter"] != "":
+				_layer.draw_string(get_theme_default_font(), m + Vector2(-4, 4), b["letter"],
+					HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color.BLACK)
 
 	# The player: an arrow pointing where they're heading.
 	var yaw := own.global_rotation.y if own else player.get_facing_yaw()

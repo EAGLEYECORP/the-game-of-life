@@ -66,6 +66,11 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _task >= 0:
 		WorkerThreadPool.wait_for_task_completion(_task)
+	_player_audio.stop()
+	_player_audio.stream = null
+	_tracks.clear()
+	_jingles.clear()
+	_task_result.clear()
 
 
 func _process(delta: float) -> void:

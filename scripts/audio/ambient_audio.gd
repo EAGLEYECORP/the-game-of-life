@@ -37,6 +37,11 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if _task >= 0:
 		WorkerThreadPool.wait_for_task_completion(_task)
+	# Release streams that are still playing, or they outlive the audio server.
+	for p in [_ocean, _traffic, _city, _gull]:
+		p.stop()
+		p.stream = null
+	_streams.clear()
 
 
 func _process(delta: float) -> void:

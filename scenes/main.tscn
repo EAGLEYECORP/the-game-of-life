@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=22 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://maps/casablanca.tscn" id="2_map"]
@@ -18,6 +18,8 @@
 [ext_resource type="Script" path="res://scripts/world/street_furniture.gd" id="17_furniture"]
 [ext_resource type="Script" path="res://scripts/audio/radio_system.gd" id="18_radio"]
 [ext_resource type="Script" path="res://scripts/audio/ambient_audio.gd" id="19_ambient"]
+[ext_resource type="Script" path="res://scripts/economy/wallet.gd" id="20_wallet"]
+[ext_resource type="Script" path="res://scripts/missions/mission_manager.gd" id="21_missions"]
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
@@ -82,6 +84,19 @@ script = ExtResource("19_ambient")
 player = NodePath("../Player")
 streamer = NodePath("../Casablanca/ChunkStreamer")
 traffic = NodePath("../Traffic")
+
+[node name="Wallet" type="Node" parent="."]
+script = ExtResource("20_wallet")
+
+[node name="Missions" type="Node3D" parent="." node_paths=PackedStringArray("player", "traffic", "streamer", "wanted", "police", "wallet", "hud")]
+script = ExtResource("21_missions")
+player = NodePath("../Player")
+traffic = NodePath("../Traffic")
+streamer = NodePath("../Casablanca/ChunkStreamer")
+wanted = NodePath("../Wanted")
+police = NodePath("../Police")
+wallet = NodePath("../Wallet")
+hud = NodePath("../HUD")
 
 [node name="CameraRig" parent="." instance=ExtResource("5_camera")]
 
